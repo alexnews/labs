@@ -14,11 +14,16 @@
     const resetBtn = document.getElementById('reset-btn');
 
     // Column name variants across banks.
+    // Order matters: more specific names first — 'Date' is the last-resort catchall.
     const COLUMN_ALIASES = {
-        date: ['Transaction Date', 'Trans. Date', 'Date', 'Posted Date', 'Post Date'],
-        description: ['Description', 'Payee', 'Merchant', 'Details'],
+        date: [
+            'Transaction Date', 'Trans. Date', 'Trans Date',
+            'Posting Date', 'Posted Date', 'Post Date',
+            'Activity Date', 'Date'
+        ],
+        description: ['Description', 'Payee', 'Merchant', 'Name', 'Details'],
         amount: ['Amount', 'Debit', 'Credit'],
-        category: ['Category', 'Type']
+        category: ['Category']
     };
 
     function findColumn(headers, candidates) {
@@ -31,10 +36,13 @@
     }
 
     function detectBankFormat(headers) {
-        const lower = headers.map(h => h.toLowerCase());
-        if (lower.includes('post date') && lower.includes('category')) return 'Chase';
-        if (lower.includes('posted date') || lower.includes('payee')) return 'Bank of America';
-        if (lower.includes('trans. date') || lower.includes('transaction date')) return 'Amex';
+        const lower = headers.map(h => h.trim().toLowerCase());
+        const has = (s) => lower.includes(s);
+        if (has('posting date') && has('balance')) return 'Chase (checking)';
+        if (has('post date') && has('category')) return 'Chase (credit card)';
+        if (has('posted date') || has('payee')) return 'Bank of America';
+        if (has('trans. date') || (has('transaction date') && has('card member'))) return 'Amex';
+        if (has('transaction date')) return 'Generic (Wells Fargo / other)';
         return 'Generic CSV';
     }
 
@@ -75,8 +83,16 @@
         const descCol = findColumn(headers, COLUMN_ALIASES.description);
         const amountCol = findColumn(headers, COLUMN_ALIASES.amount);
 
-        if (!dateCol || !descCol) {
-            showError(`Couldn't find date + description columns in this CSV. Detected headers: ${headers.join(', ')}`);
+        const missing = [];
+        if (!dateCol) missing.push('date');
+        if (!descCol) missing.push('description');
+        if (missing.length) {
+            const cols = missing.join(' and ');
+            showError(
+                `Couldn't find ${cols} column${missing.length > 1 ? 's' : ''} in this CSV. ` +
+                `Detected headers: ${headers.join(', ')}. ` +
+                `If this is from a US bank, open an issue on GitHub with a sanitized sample.`
+            );
             return;
         }
 
