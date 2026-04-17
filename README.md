@@ -9,6 +9,7 @@ Running at [labs.kargin-utkin.com](https://labs.kargin-utkin.com). Portfolio des
 | Slug | Domain | Status | Demo |
 |---|---|---|---|
 | [`gym-churn`](apps/gym-churn/) | Fitness member churn prediction | shipped | [labs.kargin-utkin.com/gym-churn](https://labs.kargin-utkin.com/gym-churn) |
+| [`spend-lens`](apps/spend-lens/) | Private personal finance analyzer (client-side) | in-progress | [labs.kargin-utkin.com/spend-lens](https://labs.kargin-utkin.com/spend-lens) |
 | `franchise-demand` | 1-hour-ahead demand forecasting | planned | — |
 
 ## Structure

@@ -1,0 +1,9 @@
+# Block any CSV except the explicit synthetic sample.
+# Protects against accidentally committing real statements.
+*.csv
+!sample_transactions.csv
+
+.DS_Store
+node_modules/
+.vscode/
+.idea/
