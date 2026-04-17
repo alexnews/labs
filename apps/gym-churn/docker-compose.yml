@@ -1,0 +1,10 @@
+services:
+  lab:
+    build: .
+    container_name: gym-churn
+    ports:
+      - "8888:8888"
+      - "8501:8501"
+    volumes:
+      - .:/app
+    working_dir: /app

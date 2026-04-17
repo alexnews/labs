@@ -1,0 +1,81 @@
+# Apache vhost for a labs platform — TEMPLATE
+#
+# Replace the following placeholders before deploying:
+#   __DOMAIN__        e.g. labs.example.com
+#   __WEBROOT__       e.g. /usr/local/www/labs
+#
+# Prerequisites:
+#   a2enmod proxy proxy_http proxy_wstunnel rewrite ssl headers
+#
+# Each app runs as a systemd service bound to 127.0.0.1:<port>.
+# Apache reverse-proxies /<app-slug>/* → localhost:<port>/*
+# WebSocket upgrade is required for Streamlit.
+
+<VirtualHost *:80>
+    ServerName __DOMAIN__
+    DocumentRoot __WEBROOT__/public
+
+    <Directory __WEBROOT__/public>
+        Options FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    # Redirect everything EXCEPT ACME challenges to HTTPS
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/
+    RewriteRule ^(.*)$ https://__DOMAIN__$1 [R=301,L]
+
+    ErrorLog  ${APACHE_LOG_DIR}/__DOMAIN___error.log
+    CustomLog ${APACHE_LOG_DIR}/__DOMAIN___access.log combined
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName __DOMAIN__
+    DocumentRoot __WEBROOT__/public
+
+    <Directory __WEBROOT__/public>
+        Options FollowSymLinks
+        AllowOverride None
+        DirectoryIndex index.html
+        Require all granted
+    </Directory>
+
+    SSLEngine on
+    SSLCertificateFile      /etc/letsencrypt/live/__DOMAIN__/fullchain.pem
+    SSLCertificateKeyFile   /etc/letsencrypt/live/__DOMAIN__/privkey.pem
+
+    ErrorLog  ${APACHE_LOG_DIR}/__DOMAIN___error.log
+    CustomLog ${APACHE_LOG_DIR}/__DOMAIN___access.log combined
+
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    ProxyPreserveHost On
+    ProxyRequests Off
+
+    # ============================================================
+    # App: gym-churn → 127.0.0.1:8501
+    # ============================================================
+    <Location /gym-churn>
+        ProxyPass         http://127.0.0.1:8501/gym-churn
+        ProxyPassReverse  http://127.0.0.1:8501/gym-churn
+    </Location>
+
+    # Streamlit WebSocket (required for live updates)
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule ^/gym-churn/(.*) ws://127.0.0.1:8501/gym-churn/$1 [P,L]
+
+    # ============================================================
+    # Add new apps above this line. Template:
+    #
+    # <Location /new-app>
+    #     ProxyPass         http://127.0.0.1:8502/new-app
+    #     ProxyPassReverse  http://127.0.0.1:8502/new-app
+    # </Location>
+    # RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    # RewriteRule ^/new-app/(.*) ws://127.0.0.1:8502/new-app/$1 [P,L]
+    # ============================================================
+</VirtualHost>

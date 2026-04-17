@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>labs.kargin-utkin.com — ML Experiments</title>
+    <meta name="description" content="Hands-on ML experiments — churn prediction, demand forecasting, and more.">
+    <style>
+        :root {
+            --accent: #65bc7b;
+            --bg: #1a1d1f;
+            --card: #272c30;
+            --text: #e8e8e8;
+            --muted: #8b9199;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Figtree', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+            line-height: 1.5;
+        }
+        .container { max-width: 820px; margin: 0 auto; }
+        header {
+            padding: 3rem 0 2.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2.5rem;
+        }
+        .label {
+            font-family: 'JetBrains Mono', 'Menlo', monospace;
+            font-size: 0.72rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 0.75rem;
+        }
+        h1 { font-size: 2.25rem; font-weight: 700; margin-bottom: 0.75rem; }
+        .tagline { color: var(--muted); font-size: 1.05rem; max-width: 620px; }
+        .tagline a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+        .tagline a:hover { border-bottom-color: var(--accent); }
+        .apps { display: grid; gap: 1rem; }
+        .app {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-decoration: none;
+            color: inherit;
+            transition: border-color 0.15s, transform 0.15s;
+            display: block;
+        }
+        .app:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .app-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+        }
+        .status { color: #d4a017; }
+        .status.shipped { color: var(--accent); }
+        .app h2 { font-size: 1.15rem; margin-bottom: 0.5rem; font-weight: 600; }
+        .app p { color: var(--muted); font-size: 0.92rem; }
+        footer {
+            margin-top: 4rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--muted);
+            text-align: center;
+        }
+        footer a { color: var(--muted); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="label">// labs</div>
+            <h1>ML Experiments</h1>
+            <p class="tagline">
+                Hands-on rebuilds of production ML systems — churn prediction, demand forecasting, and more.
+                Each app is end-to-end: synthetic data, trained model, SHAP explanations, interactive demo.
+                Portfolio descriptions at <a href="https://kargin-utkin.com/labs">kargin-utkin.com/labs</a>.
+            </p>
+        </header>
+
+        <section class="apps">
+            <a href="/gym-churn" class="app">
+                <div class="app-meta">
+                    <span>Churn Prediction</span>
+                    <span class="status">In progress</span>
+                </div>
+                <h2>Gym Member Churn Predictor</h2>
+                <p>End-to-end churn model for fitness studio members. XGBoost + SHAP, interactive demo.</p>
+            </a>
+        </section>
+
+        <footer>
+            self-hosted · private · <a href="https://kargin-utkin.com">kargin-utkin.com</a>
+        </footer>
+    </div>
+</body>
+</html>

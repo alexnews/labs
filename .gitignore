@@ -1,0 +1,22 @@
+.DS_Store
+node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+backend/venv/
+backend/.env
+__pycache__/
+*.pyc
+www/images/
+venv
+.env
+www/thumbnail/
+logs/
+req/
+cache/
+
+# Per-app generated artifacts (data, trained models, plots)
+apps/*/data/*.csv
+apps/*/data/*.pkl
+apps/*/data/*.png
+apps/*/venv/
+.ipynb_checkpoints/

@@ -1,0 +1,32 @@
+# Systemd unit template — one per app.
+#
+# Replace placeholders before deploying:
+#   __SLUG__          app slug, e.g. gym-churn
+#   __PORT__          local port, e.g. 8501
+#   __WEBROOT__       e.g. /usr/local/www/labs
+#
+# Install as: /etc/systemd/system/labs-__SLUG__.service
+
+[Unit]
+Description=labs __SLUG__ Streamlit app
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=__WEBROOT__/apps/__SLUG__
+Environment="PATH=__WEBROOT__/apps/__SLUG__/venv/bin"
+ExecStart=__WEBROOT__/apps/__SLUG__/venv/bin/streamlit run src/app.py \
+    --server.port=__PORT__ \
+    --server.address=127.0.0.1 \
+    --server.baseUrlPath=/__SLUG__ \
+    --server.headless=true \
+    --server.enableCORS=false \
+    --server.enableXsrfProtection=false \
+    --browser.gatherUsageStats=false
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

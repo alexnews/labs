@@ -1,0 +1,28 @@
+# BOOTSTRAP vhost — TEMPLATE
+#
+# Replace placeholders before deploying:
+#   __DOMAIN__        e.g. labs.example.com
+#   __WEBROOT__       e.g. /usr/local/www/labs
+#
+# Use this ONCE to provision the Let's Encrypt cert.
+# After the cert exists, disable this and enable apache-vhost.conf.
+#
+# Workflow:
+#   sudo cp scripts/apache-vhost.bootstrap.conf /etc/apache2/sites-available/labs.conf
+#   sudo a2ensite labs
+#   sudo apachectl configtest && sudo systemctl reload apache2
+#   sudo certbot certonly --webroot -w __WEBROOT__/public -d __DOMAIN__
+#   sudo cp scripts/apache-vhost.conf /etc/apache2/sites-available/labs.conf   # overwrite with full SSL version
+#   sudo apachectl configtest && sudo systemctl reload apache2
+
+<VirtualHost *:80>
+    ServerName __DOMAIN__
+    DocumentRoot __WEBROOT__/public
+
+    <Directory __WEBROOT__/public>
+        Require all granted
+    </Directory>
+
+    ErrorLog  ${APACHE_LOG_DIR}/__DOMAIN___error.log
+    CustomLog ${APACHE_LOG_DIR}/__DOMAIN___access.log combined
+</VirtualHost>
