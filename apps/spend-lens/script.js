@@ -1370,14 +1370,35 @@
     // Delegated change handler for the tag-select dropdowns in the uncategorized list.
     const uncatList = document.getElementById('uncategorized-list');
     if (uncatList) {
+        console.log('[spend-lens] tag-select handler attached to #uncategorized-list');
         uncatList.addEventListener('change', (e) => {
             const sel = e.target;
-            if (!sel || !sel.classList || !sel.classList.contains('tag-select')) return;
+            console.log('[spend-lens] change event on uncategorized-list', {
+                tag: sel && sel.tagName,
+                className: sel && sel.className,
+                classList: sel && sel.classList && Array.from(sel.classList),
+                value: sel && sel.value,
+                dataMerchant: sel && sel.dataset && sel.dataset.merchant
+            });
+            if (!sel || !sel.classList || !sel.classList.contains('tag-select')) {
+                console.log('[spend-lens] ignored — target is not a tag-select');
+                return;
+            }
             const merchant = sel.dataset.merchant;
             const category = sel.value;
-            if (!merchant || !category) return;
+            if (!merchant) {
+                console.warn('[spend-lens] ignored — no data-merchant on select');
+                return;
+            }
+            if (!category) {
+                console.log('[spend-lens] ignored — value is empty (user picked "Tag as…" placeholder)');
+                return;
+            }
+            console.log(`[spend-lens] calling applyUserTag("${merchant}", "${category}")`);
             applyUserTag(merchant, category);
         });
+    } else {
+        console.error('[spend-lens] #uncategorized-list not found at script init!');
     }
 
     // Clear-all button (inside the tag-summary block which re-renders).
