@@ -918,6 +918,11 @@
         return recurring.sort((a, b) => b.annualized - a.annualized);
     }
 
+    // Subscription simulator state — which subs are marked "cancelled" in the what-if.
+    // In-memory only; forgotten on reload (doesn't affect categorization either).
+    const cancelledSubs = new Set();
+    let lastRecurring = [];
+
     function renderRecurring(subs) {
         const section = document.getElementById('recurring-section');
         const list = document.getElementById('recurring-list');
@@ -926,8 +931,17 @@
 
         if (subs.length === 0) {
             section.classList.add('hidden');
+            cancelledSubs.clear();
+            lastRecurring = [];
             return;
         }
+
+        // Prune cancelled set to names still present (files may have been removed)
+        const validNames = new Set(subs.map(r => r.name));
+        for (const n of Array.from(cancelledSubs)) {
+            if (!validNames.has(n)) cancelledSubs.delete(n);
+        }
+        lastRecurring = subs;
 
         const monthlyTotal = subs.reduce((s, r) => s + (r.annualized / 12), 0);
         const annualTotal = subs.reduce((s, r) => s + r.annualized, 0);
@@ -938,23 +952,87 @@
             <span class="rec-total-val">${formatMoney(-annualTotal)}</span><span class="rec-total-sub">/yr</span>
         `;
 
-        list.innerHTML = subs.map(r => `
-            <div class="rec-row">
-                <div class="rec-main">
-                    <span class="rec-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
-                    <span class="rec-meta">
-                        <span class="rec-cadence">${r.cadence}</span>
-                        ${escapeHtml(r.category)} · ${r.count} charges · last ${formatDate(r.lastCharge)} · next ≈ ${formatDate(r.nextExpected)}
-                    </span>
+        list.innerHTML = subs.map(r => {
+            const checked = cancelledSubs.has(r.name) ? 'checked' : '';
+            const cancelledCls = cancelledSubs.has(r.name) ? ' cancelled' : '';
+            return `
+                <div class="rec-row${cancelledCls}" data-name="${escapeHtml(r.name)}">
+                    <label class="rec-check" title="Simulate canceling this subscription">
+                        <input type="checkbox" class="rec-cancel-check" data-name="${escapeHtml(r.name)}" ${checked}>
+                    </label>
+                    <div class="rec-main">
+                        <span class="rec-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
+                        <span class="rec-meta">
+                            <span class="rec-cadence">${r.cadence}</span>
+                            ${escapeHtml(r.category)} · ${r.count} charges · last ${formatDate(r.lastCharge)} · next ≈ ${formatDate(r.nextExpected)}
+                        </span>
+                    </div>
+                    <div class="rec-money">
+                        <div class="rec-amount">${formatMoney(-r.avgAmount)}</div>
+                        <div class="rec-annual">${formatMoney(-r.annualized)}/yr</div>
+                    </div>
                 </div>
-                <div class="rec-money">
-                    <div class="rec-amount">${formatMoney(-r.avgAmount)}</div>
-                    <div class="rec-annual">${formatMoney(-r.annualized)}/yr</div>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         section.classList.remove('hidden');
+        updateSimulation();
+    }
+
+    function updateSimulation() {
+        const sim = document.getElementById('rec-simulation');
+        if (!sim) return;
+        if (lastRecurring.length === 0 || cancelledSubs.size === 0) {
+            sim.classList.add('hidden');
+            return;
+        }
+
+        let savedMonthly = 0, savedAnnual = 0;
+        let keptMonthly = 0;
+        let nCancelled = 0, nKept = 0;
+        for (const r of lastRecurring) {
+            const monthly = r.annualized / 12;
+            if (cancelledSubs.has(r.name)) {
+                savedMonthly += monthly;
+                savedAnnual += r.annualized;
+                nCancelled++;
+            } else {
+                keptMonthly += monthly;
+                nKept++;
+            }
+        }
+
+        sim.innerHTML = `
+            <div>
+                <div class="sim-label">If you cancel ${nCancelled} subscription${nCancelled === 1 ? '' : 's'}</div>
+                <div>
+                    <span class="sim-save-big">Save ${formatMoney(-savedMonthly)}/mo</span>
+                    <span class="sim-save-sub">· ${formatMoney(-savedAnnual)}/yr</span>
+                </div>
+            </div>
+            <div class="sim-keep">
+                Keep ${nKept}<br>
+                <span class="sim-val">${formatMoney(-keptMonthly)}/mo</span>
+            </div>
+        `;
+        sim.classList.remove('hidden');
+    }
+
+    // Delegated checkbox handler — toggles simulation state without re-rendering
+    // the whole recurring list. O(1) per toggle.
+    const recListEl = document.getElementById('recurring-list');
+    if (recListEl) {
+        recListEl.addEventListener('change', (e) => {
+            const cb = e.target;
+            if (!cb || !cb.classList || !cb.classList.contains('rec-cancel-check')) return;
+            const name = cb.dataset.name;
+            if (!name) return;
+            if (cb.checked) cancelledSubs.add(name);
+            else cancelledSubs.delete(name);
+            const row = cb.closest('.rec-row');
+            if (row) row.classList.toggle('cancelled', cb.checked);
+            updateSimulation();
+        });
     }
 
     // --- Uncategorized merchants ---

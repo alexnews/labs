@@ -537,16 +537,85 @@ a:hover { border-bottom-color: var(--accent); }
 .rec-total-sub { color: var(--muted); margin-right: 0.1rem; }
 .rec-total-sep { margin: 0 0.5rem; color: var(--border-strong); }
 
+.rec-help {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+}
+
+.rec-simulation {
+    background: var(--accent-dim);
+    border: 1px solid rgba(101, 188, 123, 0.3);
+    border-radius: 8px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem 1rem;
+    align-items: center;
+}
+.sim-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+.sim-save-big {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+.sim-save-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    margin-left: 0.4rem;
+}
+.sim-keep {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--muted);
+    text-align: right;
+    white-space: nowrap;
+}
+.sim-keep .sim-val { color: var(--text); }
+
+@media (max-width: 560px) {
+    .rec-simulation { grid-template-columns: 1fr; }
+    .sim-keep { text-align: left; }
+}
+
 .recurring-list { display: flex; flex-direction: column; gap: 0; }
 .rec-row {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1rem;
+    grid-template-columns: 24px 1fr auto;
+    gap: 0.9rem;
     align-items: center;
     padding: 0.75rem 0;
     border-bottom: 1px solid var(--border);
+    transition: opacity 0.2s;
 }
+.rec-row.cancelled { opacity: 0.5; }
+.rec-row.cancelled .rec-name { text-decoration: line-through; }
+.rec-row.cancelled .rec-amount,
+.rec-row.cancelled .rec-annual { text-decoration: line-through; }
 .rec-row:last-child { border-bottom: none; }
+.rec-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.rec-cancel-check {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
 .rec-main { min-width: 0; }
 .rec-name {
     display: block;
