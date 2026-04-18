@@ -83,6 +83,28 @@
             'peer to peer money transfer', 'venmo transfer',
             'zelle payment', 'wire transfer', 'bill pay to another account',
             'ach transfer between accounts'
+        ],
+        'Taxes': [
+            'irs tax payment', 'federal tax payment', 'estimated tax payment',
+            'state tax payment', 'property tax', 'county tax collector',
+            'us treasury payment', 'department of revenue tax'
+        ],
+        'Loans & Mortgage': [
+            'mortgage servicer payment', 'home loan payment',
+            'auto loan payment', 'car loan pmt', 'personal loan payment',
+            'student loan servicer', 'loan principal and interest',
+            'mortgage escrow', 'pennymac mortgage', 'rocket mortgage loan'
+        ],
+        'Credit Card Payments': [
+            'credit card payment from checking',
+            'american express ach payment', 'amex epayment',
+            'chase credit card payment', 'citi credit card autopay',
+            'discover card payment', 'capital one card payoff',
+            'store credit card payment', 'synchrony bank card payment'
+        ],
+        'Checks': [
+            'paper check paid', 'check number paid',
+            'withdrawal by check', 'deposited check'
         ]
     };
 

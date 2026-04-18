@@ -990,11 +990,7 @@
     }
 
     function categoryOptions(selected) {
-        const cats = [
-            'Food & Drink', 'Groceries', 'Shopping', 'Transportation',
-            'Travel', 'Entertainment', 'Bills & Utilities', 'Health & Medical',
-            'Fees', 'Transfers & Payments', 'Income'
-        ];
+        const cats = (window.SpendLensCategories && window.SpendLensCategories.list) || [];
         return cats.map(c => `<option value="${escapeHtml(c)}"${c === selected ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
     }
 
@@ -1287,6 +1283,59 @@
     document.addEventListener('click', (e) => {
         if (e.target && e.target.id === 'tag-clear-btn') applyClearUserTags();
     });
+
+    // --- CSV export ---
+
+    function csvEscape(v) {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    }
+
+    function buildExportCsv() {
+        const rows = mergedTransactions();
+        const header = [
+            'Date', 'Description', 'NormalizedMerchant', 'Amount',
+            'Category', 'UserTagged', 'AiClassified', 'AiScore',
+            'SourceFile', 'SourceBank'
+        ];
+        const lines = [header.join(',')];
+        for (const t of rows) {
+            lines.push([
+                t.date,
+                t.description,
+                normalizeMerchantName(t.description),
+                t.amount.toFixed(2),
+                t.category || 'Uncategorized',
+                t.userTagged ? 'yes' : '',
+                t.aiClassified ? 'yes' : '',
+                t.aiScore !== undefined ? t.aiScore.toFixed(3) : '',
+                t.sourceFile || '',
+                t.sourceBank || ''
+            ].map(csvEscape).join(','));
+        }
+        return lines.join('\n') + '\n';
+    }
+
+    function triggerCsvDownload() {
+        if (state.files.length === 0) return;
+        const csv = buildExportCsv();
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `spend-lens_export_${ts}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        // Free the Blob URL after the browser has had a chance to use it.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    const exportBtn = document.getElementById('export-btn');
+    if (exportBtn) exportBtn.addEventListener('click', triggerCsvDownload);
 
     // --- Wire up events ---
 

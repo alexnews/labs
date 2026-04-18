@@ -10,20 +10,31 @@
     'use strict';
 
     const CATEGORY_COLORS = {
-        'Food & Drink':        '#e67a6b',
-        'Groceries':           '#65bc7b',
-        'Shopping':            '#4fc3f7',
-        'Transportation':      '#a855f7',
-        'Travel':              '#2dd4bf',
-        'Entertainment':       '#f97316',
-        'Bills & Utilities':   '#fbbf24',
-        'Health & Medical':    '#f472b6',
-        'Fees':                '#ef4444',
-        'Transfers & Payments':'#94a3b8',
-        'Income':              '#86efac',
-        'Uncategorized':       '#64748b',
-        'Other':               '#64748b'
+        'Food & Drink':         '#e67a6b',
+        'Groceries':            '#65bc7b',
+        'Shopping':             '#4fc3f7',
+        'Transportation':       '#a855f7',
+        'Travel':               '#2dd4bf',
+        'Entertainment':        '#f97316',
+        'Bills & Utilities':    '#fbbf24',
+        'Health & Medical':     '#f472b6',
+        'Fees':                 '#ef4444',
+        'Transfers & Payments': '#94a3b8',
+        'Income':               '#86efac',
+        'Taxes':                '#d4a017',
+        'Loans & Mortgage':     '#7c3aed',
+        'Credit Card Payments': '#60a5fa',
+        'Checks':               '#9ca3af',
+        'Uncategorized':        '#64748b',
+        'Other':                '#64748b'
     };
+
+    const CATEGORY_LIST = [
+        'Food & Drink', 'Groceries', 'Shopping', 'Transportation',
+        'Travel', 'Entertainment', 'Bills & Utilities', 'Health & Medical',
+        'Fees', 'Transfers & Payments', 'Income',
+        'Taxes', 'Loans & Mortgage', 'Credit Card Payments', 'Checks'
+    ];
 
     // Order matters: more specific rules first.
     const CATEGORY_RULES = [
@@ -33,6 +44,49 @@
             'late fee', 'overdraft', 'nsf', 'service fee', 'foreign transaction',
             'atm fee', 'wire fee', 'annual fee', 'maintenance fee', 'returned item',
             'insufficient funds'
+        ]},
+
+        // --- Taxes (IRS, state, property — before Bills so "city of" property tax lands here) ---
+        { category: 'Taxes', keywords: [
+            'irs usataxpymt', 'irs ', 'usataxpymt', 'us treasury', 'ustreasury',
+            'franchise tax', 'state tax', 'dept of revenue', 'dept of taxation',
+            'property tax', 'prop tax', 'tax collector', 'county tax',
+            'federal tax', 'estimated tax', 'fed tax pmt'
+        ]},
+
+        // --- Credit Card Payments (card payoffs from checking — before Transfers) ---
+        { category: 'Credit Card Payments', keywords: [
+            'american express ach', 'amex epayment', 'amex epayent', 'amex ach',
+            'chase credit crd', 'chase card', 'chase epay',
+            'citi card', 'citibank card', 'citi autopay',
+            'discover e-payment', 'discover epay',
+            'capital one crcardpmt', 'capital one autopay', 'capital one card',
+            'comenity pay', 'comenity web',
+            'applecard gsbank', 'applecard', 'gs bank apple',
+            'synchrony bank pymt', 'synchrony card', 'syf payment', 'mstrcrd syf',
+            'barclays card', 'barclaycard',
+            'bank of america credit', 'boa creditcard',
+            'wells fargo credit', 'wf credit card',
+            'payment to chase card', 'payment to amex', 'payment to citi',
+            'credit card payment', 'credit card pmt', 'cc payment'
+        ]},
+
+        // --- Loans & Mortgage (mortgage servicers, personal loans, student loans) ---
+        { category: 'Loans & Mortgage', keywords: [
+            'pennymac', 'mr cooper', 'nationstar', 'rocket mortgage',
+            'wells fargo home', 'chase mortgage', 'bofa mortgage',
+            'freedom mortgage', 'loanDepot', 'loandepot', 'caliber home',
+            'lendingpoint', 'lending point', 'sofi loan', 'upstart',
+            'avant loan', 'prosper loan', 'marcus loan',
+            'nelnet', 'great lakes', 'mohela', 'navient', 'fedloan',
+            'mortgage payment', 'mortgage pmt', 'home loan payment',
+            'auto loan', 'car loan payment', 'loan payment ppd'
+        ]},
+
+        // --- Checks (paper checks — rarely categorizable from description alone) ---
+        { category: 'Checks', keywords: [
+            'check paid #', 'check #', 'check paid', 'paper check',
+            'deposited check'
         ]},
 
         // --- Income (paychecks, deposits, refunds) ---
@@ -109,7 +163,7 @@
 
         // --- Bills & Utilities (rent, internet, phone, power) ---
         { category: 'Bills & Utilities', keywords: [
-            'rent payment', 'mortgage payment', 'hoa ',
+            'rent payment', 'hoa ', 'city of ', 'town of ', 'village of ',
             'at&t', 'att*bill', 'verizon', 'vzwrlss', 'vzw wless', 't-mobile',
             'tmobile', 'sprint', 'xfinity', 'comcast', 'spectrum', 'cox comm',
             'rcn ', 'frontier comm', 'centurylink',
@@ -170,6 +224,7 @@
     window.SpendLensCategories = {
         categorize: categorizeDescription,
         colors: CATEGORY_COLORS,
+        list: CATEGORY_LIST,
         rules: CATEGORY_RULES // exposed for debugging / "why this category?" UX later
     };
 })();

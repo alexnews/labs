@@ -143,7 +143,9 @@ a:hover { border-bottom-color: var(--accent); }
 }
 .results-period .period-sep { margin: 0 0.35rem; color: var(--border-strong); }
 .results-period .period-days { color: var(--accent); }
-.reset-btn {
+.results-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+.action-btn, .reset-btn {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.78rem;
     color: var(--muted);
@@ -152,9 +154,10 @@ a:hover { border-bottom-color: var(--accent); }
     border-radius: 6px;
     padding: 0.4rem 0.8rem;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
-.reset-btn:hover { color: var(--accent); border-color: var(--accent); }
+.action-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.reset-btn:hover { color: var(--danger); border-color: var(--danger); }
 
 .summary-cards {
     display: grid;
