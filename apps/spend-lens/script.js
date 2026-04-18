@@ -591,6 +591,113 @@
         section.classList.remove('hidden');
     }
 
+    // --- Month over month ---
+
+    function monthKeyFromDate(d) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function monthLabel(key) {
+        const [y, m] = key.split('-').map(Number);
+        return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+
+    function computeMoM(txns) {
+        const byMonth = new Map();
+        for (const t of txns) {
+            if (!t.dateObj || t.amount >= 0) continue;
+            const mk = monthKeyFromDate(t.dateObj);
+            if (!byMonth.has(mk)) byMonth.set(mk, new Map());
+            const cats = byMonth.get(mk);
+            const cat = t.category || 'Uncategorized';
+            cats.set(cat, (cats.get(cat) || 0) + Math.abs(t.amount));
+        }
+
+        const months = Array.from(byMonth.keys()).sort();
+        if (months.length < 2) return null;
+
+        const priorKey = months[months.length - 2];
+        const currentKey = months[months.length - 1];
+        const prior = byMonth.get(priorKey);
+        const current = byMonth.get(currentKey);
+
+        const allCats = new Set([...prior.keys(), ...current.keys()]);
+        const rows = [];
+        for (const cat of allCats) {
+            const p = prior.get(cat) || 0;
+            const c = current.get(cat) || 0;
+            const delta = c - p;
+            let pct = null;
+            let flag = null;
+            if (p > 0 && c > 0) pct = (delta / p) * 100;
+            else if (p === 0 && c > 0) flag = 'new';
+            else if (p > 0 && c === 0) flag = 'gone';
+            rows.push({ category: cat, prior: p, current: c, delta, pct, flag });
+        }
+        // Rank by absolute delta so biggest movers (up or down) surface first.
+        rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+        const priorTotal = Array.from(prior.values()).reduce((s, v) => s + v, 0);
+        const currentTotal = Array.from(current.values()).reduce((s, v) => s + v, 0);
+
+        return { priorKey, currentKey, prior: priorTotal, current: currentTotal, rows };
+    }
+
+    function renderMoM(txns) {
+        const section = document.getElementById('mom-section');
+        const title = document.getElementById('mom-title');
+        const totalEl = document.getElementById('mom-total');
+        const listEl = document.getElementById('mom-list');
+        if (!section || !title || !totalEl || !listEl) return;
+
+        const data = computeMoM(txns);
+        if (!data) { section.classList.add('hidden'); return; }
+
+        title.textContent = `Month over month — ${monthLabel(data.priorKey)} vs ${monthLabel(data.currentKey)}`;
+
+        const delta = data.current - data.prior;
+        const pct = data.prior > 0 ? (delta / data.prior) * 100 : null;
+        const deltaCls = delta > 0 ? 'mom-delta-up' : (delta < 0 ? 'mom-delta-down' : '');
+        const sign = delta > 0 ? '+' : (delta < 0 ? '−' : '');
+        const pctStr = pct === null ? '' : ` (${sign}${Math.abs(pct).toFixed(0)}%)`;
+        totalEl.innerHTML = `
+            Total outflow
+            <span class="mom-prior">${formatMoney(-data.prior)}</span>
+            <span class="arrow">→</span>
+            <span class="mom-current">${formatMoney(-data.current)}</span>
+            <span class="${deltaCls}">${delta === 0 ? 'no change' : `${sign}${formatMoney(Math.abs(delta))}${pctStr}`.replace(/−\$/, '−$')}</span>
+        `;
+
+        // Cap the displayed list at 10 biggest movers — the rest is typically noise.
+        const rows = data.rows.slice(0, 10);
+        listEl.innerHTML = rows.map(r => {
+            let dirCls, dirChar, pctCls, pctStr;
+            if (r.flag === 'new') {
+                dirCls = 'up'; dirChar = '↑'; pctCls = 'new'; pctStr = 'new';
+            } else if (r.flag === 'gone') {
+                dirCls = 'down'; dirChar = '↓'; pctCls = 'down'; pctStr = 'stopped';
+            } else if (r.delta > 0) {
+                dirCls = 'up'; dirChar = '↑'; pctCls = 'up';
+                pctStr = r.pct === null ? '' : `+${r.pct.toFixed(0)}%`;
+            } else if (r.delta < 0) {
+                dirCls = 'down'; dirChar = '↓'; pctCls = 'down';
+                pctStr = r.pct === null ? '' : `${r.pct.toFixed(0)}%`;
+            } else {
+                dirCls = 'flat'; dirChar = '·'; pctCls = 'flat'; pctStr = '—';
+            }
+            return `
+                <div class="mom-row">
+                    <span class="mom-dir ${dirCls}">${dirChar}</span>
+                    <span class="mom-cat">${escapeHtml(r.category)}</span>
+                    <span class="mom-values">${formatMoney(-r.prior)} → ${formatMoney(-r.current)}</span>
+                    <span class="mom-pct ${pctCls}">${pctStr}</span>
+                </div>
+            `;
+        }).join('');
+
+        section.classList.remove('hidden');
+    }
+
     // --- Category chart + breakdown ---
 
     const CATEGORY_CHART_TOP_N = 8;
@@ -956,6 +1063,7 @@
         renderSavings(analyzeSavings(txns, recurring));
         renderSummary(txns);
         renderTrend(txns);
+        renderMoM(txns);
         const agg = rollupTopN(aggregateSpendByCategory(txns), CATEGORY_CHART_TOP_N);
         renderChart(agg);
         renderBreakdown(agg);
