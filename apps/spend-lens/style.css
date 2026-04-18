@@ -289,6 +289,92 @@ a:hover { border-bottom-color: var(--accent); }
     .chart-wrapper { height: 260px; }
 }
 
+/* Recurring charges section */
+.recurring-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+.recurring-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+.recurring-header h3 { margin-bottom: 0; }
+.rec-total {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.88rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+}
+.rec-total-val { color: var(--accent); font-weight: 600; }
+.rec-total-sub { color: var(--muted); margin-right: 0.1rem; }
+.rec-total-sep { margin: 0 0.5rem; color: var(--border-strong); }
+
+.recurring-list { display: flex; flex-direction: column; gap: 0; }
+.rec-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+}
+.rec-row:last-child { border-bottom: none; }
+.rec-main { min-width: 0; }
+.rec-name {
+    display: block;
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 0.2rem;
+}
+.rec-meta {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.74rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+}
+.rec-cadence {
+    display: inline-block;
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 1px 7px;
+    border-radius: 4px;
+    margin-right: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.68rem;
+}
+.rec-money { text-align: right; }
+.rec-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.95rem;
+    color: var(--text);
+}
+.rec-annual {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.15rem;
+}
+.rec-next {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.25rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
 /* Uncategorized merchants section */
 .uncategorized-section {
     background: var(--card);

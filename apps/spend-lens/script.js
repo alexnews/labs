@@ -362,6 +362,132 @@
         `;
     }
 
+    // --- Recurring charge detection ---
+
+    const CADENCE_SPECS = [
+        { label: 'weekly',    min: 6,   max: 8,   periodsPerYear: 52  },
+        { label: 'biweekly',  min: 13,  max: 15,  periodsPerYear: 26  },
+        { label: 'monthly',   min: 25,  max: 35,  periodsPerYear: 12  },
+        { label: 'quarterly', min: 85,  max: 95,  periodsPerYear: 4   },
+        { label: 'annual',    min: 330, max: 400, periodsPerYear: 1   }
+    ];
+
+    function median(arr) {
+        if (arr.length === 0) return 0;
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+    }
+
+    function coefficientOfVariation(arr) {
+        if (arr.length === 0) return 0;
+        const mean = arr.reduce((s, x) => s + x, 0) / arr.length;
+        if (mean === 0) return 0;
+        const variance = arr.reduce((s, x) => s + (x - mean) ** 2, 0) / arr.length;
+        return Math.sqrt(variance) / mean;
+    }
+
+    function detectCadence(medianIntervalDays) {
+        return CADENCE_SPECS.find(c => medianIntervalDays >= c.min && medianIntervalDays <= c.max) || null;
+    }
+
+    function addDays(date, days) {
+        const d = new Date(date);
+        d.setDate(d.getDate() + days);
+        return d;
+    }
+
+    function detectRecurring(txns) {
+        const byMerchant = new Map();
+        for (const t of txns) {
+            if (t.amount >= 0) continue;
+            if (!t.dateObj) continue;
+            const key = normalizeMerchantName(t.description);
+            if (!key) continue;
+            if (!byMerchant.has(key)) byMerchant.set(key, []);
+            byMerchant.get(key).push(t);
+        }
+
+        const recurring = [];
+        for (const [name, txs] of byMerchant) {
+            if (txs.length < 2) continue;
+            txs.sort((a, b) => a.dateObj - b.dateObj);
+
+            const intervals = [];
+            for (let i = 1; i < txs.length; i++) {
+                const days = (txs[i].dateObj - txs[i - 1].dateObj) / 86400000;
+                intervals.push(days);
+            }
+
+            const medianInterval = median(intervals);
+            const amounts = txs.map(t => Math.abs(t.amount));
+            const medianAmount = median(amounts);
+            const amountCoV = coefficientOfVariation(amounts);
+
+            // Subscriptions have stable amounts. Reject highly variable merchants (coffee runs, etc.).
+            if (amountCoV > 0.25) continue;
+
+            const cadence = detectCadence(medianInterval);
+            if (!cadence) continue;
+
+            const last = txs[txs.length - 1];
+            const nextExpected = addDays(last.dateObj, Math.round(medianInterval));
+
+            recurring.push({
+                name,
+                cadence: cadence.label,
+                periodsPerYear: cadence.periodsPerYear,
+                avgAmount: medianAmount,
+                count: txs.length,
+                annualized: medianAmount * cadence.periodsPerYear,
+                lastCharge: last.dateObj,
+                nextExpected,
+                category: last.category || 'Uncategorized'
+            });
+        }
+
+        return recurring.sort((a, b) => b.annualized - a.annualized);
+    }
+
+    function renderRecurring(subs) {
+        const section = document.getElementById('recurring-section');
+        const list = document.getElementById('recurring-list');
+        const totalEl = document.getElementById('recurring-total');
+        if (!section || !list || !totalEl) return;
+
+        if (subs.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        const monthlyTotal = subs.reduce((s, r) => s + (r.annualized / 12), 0);
+        const annualTotal = subs.reduce((s, r) => s + r.annualized, 0);
+
+        totalEl.innerHTML = `
+            <span class="rec-total-val">${formatMoney(-monthlyTotal)}</span><span class="rec-total-sub">/mo</span>
+            <span class="rec-total-sep">·</span>
+            <span class="rec-total-val">${formatMoney(-annualTotal)}</span><span class="rec-total-sub">/yr</span>
+        `;
+
+        list.innerHTML = subs.map(r => `
+            <div class="rec-row">
+                <div class="rec-main">
+                    <span class="rec-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
+                    <span class="rec-meta">
+                        <span class="rec-cadence">${r.cadence}</span>
+                        ${escapeHtml(r.category)} · ${r.count} charges · last ${formatDate(r.lastCharge)} · next ≈ ${formatDate(r.nextExpected)}
+                    </span>
+                </div>
+                <div class="rec-money">
+                    <div class="rec-amount">${formatMoney(-r.avgAmount)}</div>
+                    <div class="rec-annual">${formatMoney(-r.annualized)}/yr</div>
+                </div>
+            </div>
+        `).join('');
+
+        section.classList.remove('hidden');
+    }
+
     // --- Uncategorized merchants ---
 
     function normalizeMerchantName(desc) {
@@ -438,6 +564,7 @@
         const agg = rollupTopN(aggregateSpendByCategory(txns), CATEGORY_CHART_TOP_N);
         renderChart(agg);
         renderBreakdown(agg);
+        renderRecurring(detectRecurring(txns));
         renderUncategorized(txns);
         renderPreview(txns);
 
