@@ -35,30 +35,46 @@
         nextId: 1
     };
 
-    // --- User tags (persisted on THIS device's localStorage, never transmitted) ---
-    // Normalized merchant name → category override. Acts as Level-1 (exact match)
-    // rule checked before keyword rules or ML. Also fed to the ML classifier as
-    // Level-2 exemplars so centroids learn from your world.
+    // --- User tags + custom categories (persisted on THIS device, never transmitted) ---
+    // userTags:       normalized merchant name → category override (Level-1 exact match)
+    // userCategories: custom categories the user has added beyond the built-in list
+    // Both feed the ML classifier as Level-2 exemplars.
     const USER_TAGS_KEY = 'spendlens.userTags';
+    const USER_CATS_KEY = 'spendlens.userCategories';
+
+    // Palette for custom categories — hash-assigned for stability.
+    const CUSTOM_CATEGORY_COLORS = [
+        '#ec4899', '#06b6d4', '#84cc16', '#f59e0b',
+        '#8b5cf6', '#14b8a6', '#f43f5e', '#0ea5e9',
+        '#a3e635', '#f472b6', '#22d3ee', '#fb923c'
+    ];
+
+    function hashStringToColor(s) {
+        let h = 0;
+        for (let i = 0; i < s.length; i++) h = ((h * 31 + s.charCodeAt(i)) | 0);
+        return CUSTOM_CATEGORY_COLORS[Math.abs(h) % CUSTOM_CATEGORY_COLORS.length];
+    }
 
     function loadUserTags() {
-        try {
-            const raw = localStorage.getItem(USER_TAGS_KEY);
-            return raw ? JSON.parse(raw) : {};
-        } catch (e) { return {}; }
+        try { return JSON.parse(localStorage.getItem(USER_TAGS_KEY) || '{}') || {}; }
+        catch (e) { return {}; }
     }
-
     function saveUserTags(tags) {
-        try {
-            localStorage.setItem(USER_TAGS_KEY, JSON.stringify(tags));
-        } catch (e) { /* quota or disabled — ignore */ }
+        try { localStorage.setItem(USER_TAGS_KEY, JSON.stringify(tags)); } catch (e) {}
     }
+    function clearUserTags() { try { localStorage.removeItem(USER_TAGS_KEY); } catch (e) {} }
 
-    function clearUserTags() {
-        try { localStorage.removeItem(USER_TAGS_KEY); } catch (e) {}
+    function loadUserCategories() {
+        try { return JSON.parse(localStorage.getItem(USER_CATS_KEY) || '[]') || []; }
+        catch (e) { return []; }
     }
+    function saveUserCategories(cats) {
+        try { localStorage.setItem(USER_CATS_KEY, JSON.stringify(cats)); } catch (e) {}
+    }
+    function clearUserCategories() { try { localStorage.removeItem(USER_CATS_KEY); } catch (e) {} }
 
     let userTags = loadUserTags();
+    let userCategories = loadUserCategories();
 
     function userExemplarsByCategory() {
         const out = {};
@@ -703,10 +719,8 @@
     const CATEGORY_CHART_TOP_N = 8;
     let categoryChart = null;
 
-    function categoryColor(cat) {
-        const colors = (window.SpendLensCategories && window.SpendLensCategories.colors) || {};
-        return colors[cat] || '#64748b';
-    }
+    // categoryColor is defined above (near allCategories) so it can fall back
+    // to hash-based colors for user-created categories.
 
     function aggregateSpendByCategory(txns) {
         const byCat = new Map();
@@ -1067,9 +1081,24 @@
         return Array.from(byName.values()).sort((a, b) => b.total - a.total);
     }
 
+    function allCategories() {
+        const base = (window.SpendLensCategories && window.SpendLensCategories.list) || [];
+        return [...base, ...userCategories];
+    }
+
+    function categoryColor(cat) {
+        const base = (window.SpendLensCategories && window.SpendLensCategories.colors) || {};
+        if (base[cat]) return base[cat];
+        return hashStringToColor(cat);
+    }
+
     function categoryOptions(selected) {
-        const cats = (window.SpendLensCategories && window.SpendLensCategories.list) || [];
-        return cats.map(c => `<option value="${escapeHtml(c)}"${c === selected ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+        const cats = allCategories();
+        const opts = cats.map(c =>
+            `<option value="${escapeHtml(c)}"${c === selected ? ' selected' : ''}>${escapeHtml(c)}</option>`
+        ).join('');
+        // Special value triggers "new category" flow in the change handler.
+        return opts + `<option value="__new__">+ New category…</option>`;
     }
 
     function renderUncategorized(txns) {
@@ -1101,13 +1130,21 @@
         const el = document.getElementById('tag-summary');
         if (!el) return;
         const count = Object.keys(userTags).length;
-        if (count === 0) {
+        const catCount = userCategories.length;
+        if (count === 0 && catCount === 0) {
             el.innerHTML = '';
             return;
         }
+        const parts = [];
+        if (count > 0) parts.push(`${count} custom tag${count === 1 ? '' : 's'}`);
+        if (catCount > 0) parts.push(`${catCount} custom categor${catCount === 1 ? 'y' : 'ies'}`);
         el.innerHTML = `
-            <span class="tag-count">${count} custom tag${count === 1 ? '' : 's'} saved on this device</span>
-            <button class="tag-clear-btn" id="tag-clear-btn" type="button">Clear all</button>
+            <span class="tag-count">${parts.join(' · ')} saved on this device</span>
+            <div class="tag-actions">
+                <button class="tag-io-btn" id="tag-export-btn" type="button" title="Download your tags + custom categories as JSON">Export</button>
+                <button class="tag-io-btn" id="tag-import-btn" type="button" title="Load tags + custom categories from a JSON file">Import</button>
+                <button class="tag-clear-btn" id="tag-clear-btn" type="button">Clear all</button>
+            </div>
         `;
     }
 
@@ -1354,10 +1391,11 @@
     }
 
     function applyClearUserTags() {
-        if (!confirm('Clear all your saved category tags? This will revert those merchants back to the default rules/ML.')) return;
+        if (!confirm('Clear all your saved tags AND custom categories? Existing data stays; only your personal rules are reset.')) return;
         clearUserTags();
+        clearUserCategories();
         userTags = {};
-        // Re-categorize all existing transactions from scratch (user overrides gone).
+        userCategories = [];
         for (const f of state.files) {
             for (const t of f.transactions) {
                 t.category = categorizeWithUserTags(t.description, null);
@@ -1367,43 +1405,116 @@
         render();
     }
 
+    // --- Export / Import tags + custom categories ---
+
+    function exportTagsJson() {
+        const payload = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            userTags,
+            userCategories
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `spend-lens-tags_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function mergeImportedTags(data) {
+        if (!data || typeof data !== 'object') { alert('Invalid JSON — expected an object.'); return; }
+        if (data.userCategories && Array.isArray(data.userCategories)) {
+            for (const c of data.userCategories) {
+                if (typeof c === 'string' && c.trim()) addUserCategory(c);
+            }
+        }
+        let tagCount = 0;
+        if (data.userTags && typeof data.userTags === 'object') {
+            for (const [merchant, category] of Object.entries(data.userTags)) {
+                if (typeof merchant === 'string' && typeof category === 'string') {
+                    userTags[merchant] = category;
+                    tagCount++;
+                }
+            }
+            saveUserTags(userTags);
+        }
+
+        // Re-categorize all existing transactions against the updated rules.
+        for (const f of state.files) {
+            for (const t of f.transactions) {
+                t.category = categorizeWithUserTags(t.description, null);
+                t.userTagged = !!userTags[normalizeMerchantName(t.description)];
+            }
+        }
+        render();
+        showToast(`Imported ${tagCount} tags · ${userCategories.length} custom categor${userCategories.length === 1 ? 'y' : 'ies'} total`);
+    }
+
+    function triggerTagsImport() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json,.json';
+        input.onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const data = JSON.parse(String(ev.target.result));
+                    mergeImportedTags(data);
+                } catch (err) {
+                    alert('Could not parse JSON: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+
+    function addUserCategory(name) {
+        const clean = String(name || '').trim();
+        if (!clean) return null;
+        if (clean.length > 40) { alert('Category name too long (max 40 characters).'); return null; }
+        const existing = allCategories();
+        const match = existing.find(c => c.toLowerCase() === clean.toLowerCase());
+        if (match) return match; // already exists (possibly with different case) — reuse it
+        userCategories.push(clean);
+        saveUserCategories(userCategories);
+        return clean;
+    }
+
     // Delegated change handler for the tag-select dropdowns in the uncategorized list.
     const uncatList = document.getElementById('uncategorized-list');
     if (uncatList) {
-        console.log('[spend-lens] tag-select handler attached to #uncategorized-list');
         uncatList.addEventListener('change', (e) => {
             const sel = e.target;
-            console.log('[spend-lens] change event on uncategorized-list', {
-                tag: sel && sel.tagName,
-                className: sel && sel.className,
-                classList: sel && sel.classList && Array.from(sel.classList),
-                value: sel && sel.value,
-                dataMerchant: sel && sel.dataset && sel.dataset.merchant
-            });
-            if (!sel || !sel.classList || !sel.classList.contains('tag-select')) {
-                console.log('[spend-lens] ignored — target is not a tag-select');
-                return;
-            }
+            if (!sel || !sel.classList || !sel.classList.contains('tag-select')) return;
             const merchant = sel.dataset.merchant;
-            const category = sel.value;
-            if (!merchant) {
-                console.warn('[spend-lens] ignored — no data-merchant on select');
-                return;
+            let category = sel.value;
+            if (!merchant || !category) return;
+
+            if (category === '__new__') {
+                const name = prompt('Name for the new category (e.g. Education, Pets, Kids):');
+                // reset the dropdown whether or not the user cancels
+                sel.value = '';
+                const added = addUserCategory(name);
+                if (!added) return;
+                category = added;
             }
-            if (!category) {
-                console.log('[spend-lens] ignored — value is empty (user picked "Tag as…" placeholder)');
-                return;
-            }
-            console.log(`[spend-lens] calling applyUserTag("${merchant}", "${category}")`);
             applyUserTag(merchant, category);
         });
-    } else {
-        console.error('[spend-lens] #uncategorized-list not found at script init!');
     }
 
-    // Clear-all button (inside the tag-summary block which re-renders).
+    // Tag-summary buttons (Export / Import / Clear) — delegated since they re-render.
     document.addEventListener('click', (e) => {
-        if (e.target && e.target.id === 'tag-clear-btn') applyClearUserTags();
+        if (!e.target || !e.target.id) return;
+        if (e.target.id === 'tag-clear-btn') applyClearUserTags();
+        else if (e.target.id === 'tag-export-btn') exportTagsJson();
+        else if (e.target.id === 'tag-import-btn') triggerTagsImport();
     });
 
     // --- CSV export ---

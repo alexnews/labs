@@ -789,13 +789,15 @@ a:hover { border-bottom-color: var(--accent); }
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    flex-wrap: wrap;
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.78rem;
     color: var(--muted);
 }
 .tag-summary:empty { display: none; padding: 0; margin: 0; border-top: none; }
 .tag-count { letter-spacing: 0.04em; }
-.tag-clear-btn {
+.tag-actions { display: flex; gap: 0.4rem; }
+.tag-io-btn, .tag-clear-btn {
     background: transparent;
     border: 1px solid var(--border-strong);
     color: var(--muted);
@@ -804,8 +806,9 @@ a:hover { border-bottom-color: var(--accent); }
     cursor: pointer;
     font-family: inherit;
     font-size: 0.75rem;
-    transition: color 0.12s, border-color 0.12s;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
+.tag-io-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .tag-clear-btn:hover { color: var(--danger); border-color: var(--danger); }
 .uncat-row:last-child { border-bottom: none; }
 .uncat-name {
