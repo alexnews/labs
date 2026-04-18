@@ -48,12 +48,23 @@
             </div>
             <div class="file-chips" id="file-chips"></div>
             <div class="summary-cards" id="summary-cards"></div>
+
+            <div class="chart-section" id="chart-section">
+                <h3>Spending by category</h3>
+                <div class="chart-layout">
+                    <div class="chart-wrapper">
+                        <canvas id="category-chart"></canvas>
+                    </div>
+                    <div class="category-breakdown" id="category-breakdown"></div>
+                </div>
+            </div>
+
             <div class="preview-table-wrapper">
                 <h3 id="preview-title">Recent transactions</h3>
                 <div class="preview-table" id="preview-table"></div>
             </div>
             <div class="day1-note">
-                <strong>Day-2 build.</strong> Categorization, savings insights, and charts arrive this week. Today you can load multiple statements and see the combined picture.
+                <strong>Day-2 build.</strong> Subscription detection, savings insights, and lifestyle-inflation analysis land next. Categorization rules live in <code>categories.js</code> — fork and tune for your spending.
             </div>
         </section>
 
@@ -65,6 +76,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="categories.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

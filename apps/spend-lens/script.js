@@ -91,6 +91,7 @@
         const dateCol = findColumn(headers, COLUMN_ALIASES.date);
         const descCol = findColumn(headers, COLUMN_ALIASES.description);
         const amountCol = findColumn(headers, COLUMN_ALIASES.amount);
+        const categoryCol = findColumn(headers, COLUMN_ALIASES.category);
 
         const missing = [];
         if (!dateCol) missing.push('date');
@@ -105,13 +106,18 @@
         }
 
         const bank = detectBankFormat(headers);
+        const categorize = (window.SpendLensCategories && window.SpendLensCategories.categorize) || (() => 'Uncategorized');
+
         const transactions = rows.map(row => {
             const dateStr = String(row[dateCol] || '').trim();
+            const desc = String(row[descCol] || '').trim();
+            const bankCat = categoryCol ? String(row[categoryCol] || '').trim() : '';
             return {
                 date: dateStr,
                 dateObj: parseDate(dateStr),
-                description: String(row[descCol] || '').trim(),
-                amount: parseAmount(row, amountCol)
+                description: desc,
+                amount: parseAmount(row, amountCol),
+                category: categorize(desc, bankCat)
             };
         }).filter(t => t.date && t.description);
 
@@ -223,6 +229,110 @@
         `;
     }
 
+    // --- Category chart + breakdown ---
+
+    const CATEGORY_CHART_TOP_N = 8;
+    let categoryChart = null;
+
+    function categoryColor(cat) {
+        const colors = (window.SpendLensCategories && window.SpendLensCategories.colors) || {};
+        return colors[cat] || '#64748b';
+    }
+
+    function aggregateSpendByCategory(txns) {
+        const byCat = new Map();
+        for (const t of txns) {
+            // Only include outflows. Income + incoming transfers are excluded from the spend chart.
+            if (t.amount >= 0) continue;
+            const cat = t.category || 'Uncategorized';
+            byCat.set(cat, (byCat.get(cat) || 0) + Math.abs(t.amount));
+        }
+        return Array.from(byCat.entries())
+            .map(([category, total]) => ({ category, total }))
+            .sort((a, b) => b.total - a.total);
+    }
+
+    function rollupTopN(cats, n) {
+        if (cats.length <= n) return cats;
+        const top = cats.slice(0, n);
+        const rest = cats.slice(n);
+        const otherTotal = rest.reduce((s, c) => s + c.total, 0);
+        return [...top, { category: 'Other', total: otherTotal }];
+    }
+
+    function renderChart(agg) {
+        const canvas = document.getElementById('category-chart');
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        if (categoryChart) {
+            categoryChart.destroy();
+            categoryChart = null;
+        }
+        if (agg.length === 0) return;
+
+        const total = agg.reduce((s, c) => s + c.total, 0);
+
+        categoryChart = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: agg.map(c => c.category),
+                datasets: [{
+                    data: agg.map(c => c.total),
+                    backgroundColor: agg.map(c => categoryColor(c.category)),
+                    borderColor: '#1a1d1f',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '56%',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#0f141a',
+                        titleColor: '#e8e8e8',
+                        bodyColor: '#e8e8e8',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: true,
+                        callbacks: {
+                            label: (ctx) => {
+                                const v = ctx.parsed;
+                                const pct = total > 0 ? (v / total * 100).toFixed(1) : '0';
+                                return `${ctx.label}: ${formatMoney(-v)} (${pct}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderBreakdown(agg) {
+        const container = document.getElementById('category-breakdown');
+        if (!container) return;
+
+        const total = agg.reduce((s, c) => s + c.total, 0);
+        if (total === 0) {
+            container.innerHTML = `<div style="color:var(--muted);padding:0.5rem 0;font-size:0.9rem;">No outflows to categorize yet.</div>`;
+            return;
+        }
+
+        container.innerHTML = agg.map(c => {
+            const pct = (c.total / total * 100).toFixed(1);
+            return `
+                <div class="category-row">
+                    <span class="category-swatch" style="background:${categoryColor(c.category)}"></span>
+                    <span class="category-name">${escapeHtml(c.category)}</span>
+                    <span class="category-amount">${formatMoney(-c.total)}</span>
+                    <span class="category-pct">${pct}%</span>
+                </div>
+            `;
+        }).join('');
+    }
+
     function renderPreview(txns) {
         const top = txns.slice(0, 10);
         const multiFile = state.files.length > 1;
@@ -250,6 +360,7 @@
         clearError();
         if (state.files.length === 0) {
             // Back to initial state.
+            if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
             resultsSection.classList.add('hidden');
             uploadSection.classList.remove('hidden');
             uploadPrompt.textContent = 'Drop your CSV here, or click to select';
@@ -265,6 +376,9 @@
 
         renderChips();
         renderSummary(txns);
+        const agg = rollupTopN(aggregateSpendByCategory(txns), CATEGORY_CHART_TOP_N);
+        renderChart(agg);
+        renderBreakdown(agg);
         renderPreview(txns);
 
         resultsSection.classList.remove('hidden');
