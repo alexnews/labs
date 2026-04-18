@@ -14,10 +14,20 @@ Every budgeting app (Mint, Copilot, YNAB, Monarch) sends your transaction data t
 
 1. Open DevTools → Network tab before uploading.
 2. Drop a sample CSV.
-3. Confirm: zero requests contain your file data. The only network traffic is loading the app itself.
-4. Close the tab. Your data is gone. Nothing was saved.
+3. Confirm: zero requests contain your file data. The only network traffic is loading the app itself and (if you opt into the AI classifier) the model weights from HuggingFace.
+4. Close the tab. Your transaction data is gone.
 
 This isn't a trust claim. It's an architectural property.
+
+### What actually persists (and where)
+
+| Data | Where | Who can see |
+|---|---|---|
+| Your CSV content (amounts, dates, descriptions) | Browser tab memory only | Only you, only while the tab is open |
+| ML model weights (~22MB, if you use the AI button) | Browser HTTP cache | Only you |
+| Your category tags (e.g. "PENNYMAC CASH → Mortgage") | `localStorage` on **your** device | Only you. Clearable via the app's "Clear all" button or your browser's data-clear setting |
+
+Only the tiny `merchant → category` metadata persists, and only on your device. The transaction stream itself is always ephemeral.
 
 ## Run it locally (offline, air-gapped if you want)
 
@@ -42,30 +52,32 @@ Auto-detects column layouts from:
 
 If your bank uses different headers, spend-lens falls back to heuristic matching on Date + Description + Amount. If it misdetects, open an issue with a sanitized sample.
 
-## What it does (and when)
+## What it does
 
-### Day 1 (scaffold)
-- Drop CSV → read via File API
+### Ingest
+- Drop one or many CSVs — Chase checking, Chase credit card, BofA, Amex, Wells Fargo, generic
 - Auto-detect bank format from headers
-- Summary cards: transaction count, total spend, total income, net
-- Preview of first 10 transactions
+- **Cross-file dedup** — dropping overlapping statements (e.g. April + April-May combined) detects and skips duplicate rows; fully-duplicate file is rejected with a clear message
 
-### Shipped
-- Rule-based merchant categorizer (~200 US merchants, 11 categories, in `categories.js`)
-- **Embedding-based classifier for the long tail** — [Transformers.js](https://huggingface.co/docs/transformers.js) running [`Xenova/all-MiniLM-L6-v2`](https://huggingface.co/Xenova/all-MiniLM-L6-v2) **in the browser**. Opt-in button re-classifies "Uncategorized" transactions via cosine similarity against category exemplars. Model weights download once (~22MB), cached forever.
-- Category pie chart + breakdown list
-- Spend-over-time line chart (auto weekly / monthly)
-- **Subscription creep detector** — groups by normalized merchant, detects cadence (weekly / biweekly / monthly / quarterly / annual), requires stable amounts
-- **Top 3 savings opportunities** — synthesizer card at top of results
-- Multi-file upload (Chase checking + credit card + BofA + Amex merged into one view)
-- Top uncategorized merchants list (diagnostic)
+### Categorization (two-layer)
+- **Layer 1 — rule-based** (`categories.js`): ~200 US merchants mapped to 11 categories via keyword rules. Deterministic, fast, no ML required.
+- **Layer 2 — ML embedding fallback** (`classifier.js`): opt-in button loads [`Xenova/all-MiniLM-L6-v2`](https://huggingface.co/Xenova/all-MiniLM-L6-v2) via [Transformers.js](https://huggingface.co/docs/transformers.js). Embeds each uncategorized merchant, compares to category centroids built from exemplar phrases, assigns the best match above a cosine-similarity threshold. Runs entirely in your browser. Weights fetched from HuggingFace once (~22MB), cached forever.
+- **User-taught overrides** — click any uncategorized merchant, pick a category from the dropdown. Saved to your device's `localStorage` and applied to every future session. When the AI model is loaded, your correction also becomes an **exemplar** — the category's centroid vector updates, and similar unknown merchants you haven't tagged yet start classifying correctly. That's few-shot learning happening on-device.
+
+### Analysis
+- **Top 3 savings opportunities** (synthesizer card): ranks subscriptions, fees, dining frequency, streaming-stack overlap by annualized impact
+- **Spending over time** (line chart): auto weekly / monthly buckets, spend + income
+- **Month-over-month comparison**: when data spans ≥2 months, shows per-category delta + % change, flags new / stopped categories, ranked by biggest movers
+- **Category pie + breakdown** with top-8 + Other rollup
+- **Subscription creep detector**: median-interval + amount-variance detection of weekly / biweekly / monthly / quarterly / annual recurring charges, with annualized totals
+- **Top uncategorized merchants**: normalized-name rollup of what rules and ML missed — so you can either tag them or add keywords to `categories.js`
 
 ### V2 (maybe)
 - Forecast: "at this pace you'll end the month $X over budget in Dining"
 - Bill predictor + cash-flow calendar
-- Month-over-month comparison
 - Category drill-down (click pie slice → see transactions)
 - Export insights as PDF (client-side, via [jsPDF](https://github.com/parallax/jsPDF))
+- Optional IndexedDB for cross-session memory (opt-in; same privacy as localStorage — your device, not mine)
 
 ## Sample data
 
