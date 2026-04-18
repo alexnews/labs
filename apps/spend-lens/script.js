@@ -76,6 +76,19 @@
     let userTags = loadUserTags();
     let userCategories = loadUserCategories();
 
+    console.log('[spend-lens] init — userTags:', Object.keys(userTags).length, 'entries; userCategories:', userCategories);
+
+    // Expose for quick debugging in DevTools — window.__spendLens.dump()
+    window.__spendLens = {
+        dump: () => ({
+            userTags: { ...userTags },
+            userCategories: [...userCategories],
+            files: state.files.map(f => ({ name: f.name, bank: f.bank, txCount: f.transactions.length })),
+            rawTagsStorage: localStorage.getItem(USER_TAGS_KEY),
+            rawCatsStorage: localStorage.getItem(USER_CATS_KEY)
+        })
+    };
+
     function userExemplarsByCategory() {
         const out = {};
         for (const [merchant, cat] of Object.entries(userTags)) {
@@ -1414,6 +1427,7 @@
             userTags,
             userCategories
         };
+        console.log('[spend-lens] exporting:', payload);
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1426,12 +1440,21 @@
     }
 
     function mergeImportedTags(data) {
+        console.log('[spend-lens] importing:', data);
         if (!data || typeof data !== 'object') { alert('Invalid JSON — expected an object.'); return; }
+
+        const beforeCats = [...userCategories];
+        const beforeTags = Object.keys(userTags).length;
+
         if (data.userCategories && Array.isArray(data.userCategories)) {
+            console.log(`[spend-lens] importing ${data.userCategories.length} categories:`, data.userCategories);
             for (const c of data.userCategories) {
                 if (typeof c === 'string' && c.trim()) addUserCategory(c);
             }
+        } else {
+            console.warn('[spend-lens] no userCategories field in import, or not an array');
         }
+
         let tagCount = 0;
         if (data.userTags && typeof data.userTags === 'object') {
             for (const [merchant, category] of Object.entries(data.userTags)) {
@@ -1441,7 +1464,12 @@
                 }
             }
             saveUserTags(userTags);
+        } else {
+            console.warn('[spend-lens] no userTags field in import, or not an object');
         }
+
+        console.log('[spend-lens] after import — userCategories:', [...userCategories], '(was', beforeCats, ') — userTags count:', Object.keys(userTags).length, '(was', beforeTags, ')');
+        console.log('[spend-lens] localStorage after import — cats:', localStorage.getItem(USER_CATS_KEY), 'tags:', localStorage.getItem(USER_TAGS_KEY));
 
         // Re-categorize all existing transactions against the updated rules.
         for (const f of state.files) {
@@ -1477,13 +1505,17 @@
 
     function addUserCategory(name) {
         const clean = String(name || '').trim();
-        if (!clean) return null;
+        if (!clean) { console.log('[spend-lens] addUserCategory — empty name, skip'); return null; }
         if (clean.length > 40) { alert('Category name too long (max 40 characters).'); return null; }
         const existing = allCategories();
         const match = existing.find(c => c.toLowerCase() === clean.toLowerCase());
-        if (match) return match; // already exists (possibly with different case) — reuse it
+        if (match) {
+            console.log(`[spend-lens] addUserCategory — "${clean}" already exists (matched "${match}")`);
+            return match;
+        }
         userCategories.push(clean);
         saveUserCategories(userCategories);
+        console.log(`[spend-lens] addUserCategory — added "${clean}". userCategories now:`, [...userCategories]);
         return clean;
     }
 
