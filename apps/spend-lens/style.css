@@ -241,6 +241,35 @@ a:hover { border-bottom-color: var(--accent); }
     background: rgba(230, 122, 107, 0.12);
 }
 
+/* Trend section (line chart over time) */
+.trend-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+.trend-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.trend-header h3 { margin-bottom: 0; }
+.trend-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.trend-wrapper {
+    position: relative;
+    height: 280px;
+}
+
 /* Chart section */
 .chart-section {
     background: var(--card);

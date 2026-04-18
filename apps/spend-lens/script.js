@@ -243,6 +243,151 @@
         `;
     }
 
+    // --- Trend chart (spend + income over time) ---
+
+    let trendChart = null;
+
+    function bucketKey(date, granularity) {
+        if (granularity === 'week') {
+            const d = new Date(date);
+            const dow = d.getDay() || 7; // Sun=0 → treat as 7 so Mon is first
+            d.setDate(d.getDate() - dow + 1);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function bucketLabel(key, granularity) {
+        if (granularity === 'week') {
+            const [y, m, d] = key.split('-').map(Number);
+            const date = new Date(y, m - 1, d);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+        const [y, m] = key.split('-').map(Number);
+        return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    }
+
+    function chooseGranularity(txns) {
+        const dates = txns.map(t => t.dateObj).filter(Boolean);
+        if (dates.length === 0) return 'week';
+        const min = Math.min(...dates);
+        const max = Math.max(...dates);
+        const days = (max - min) / 86400000;
+        return days > 60 ? 'month' : 'week';
+    }
+
+    function aggregateByPeriod(txns, granularity) {
+        const buckets = new Map();
+        for (const t of txns) {
+            if (!t.dateObj) continue;
+            const key = bucketKey(t.dateObj, granularity);
+            if (!buckets.has(key)) buckets.set(key, { key, spend: 0, income: 0 });
+            const b = buckets.get(key);
+            if (t.amount < 0) b.spend += -t.amount;
+            else b.income += t.amount;
+        }
+        return Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key));
+    }
+
+    function renderTrend(txns) {
+        const section = document.getElementById('trend-section');
+        const canvas = document.getElementById('trend-chart');
+        const sub = document.getElementById('trend-sub');
+        if (!section || !canvas || typeof Chart === 'undefined') return;
+
+        if (trendChart) { trendChart.destroy(); trendChart = null; }
+
+        const granularity = chooseGranularity(txns);
+        const buckets = aggregateByPeriod(txns, granularity);
+
+        if (buckets.length < 2) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        const labels = buckets.map(b => bucketLabel(b.key, granularity));
+        const spendData = buckets.map(b => b.spend);
+        const incomeData = buckets.map(b => b.income);
+        const anyIncome = incomeData.some(v => v > 0);
+
+        const datasets = [{
+            label: 'Spend',
+            data: spendData,
+            borderColor: '#e67a6b',
+            backgroundColor: 'rgba(230, 122, 107, 0.12)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5
+        }];
+        if (anyIncome) {
+            datasets.push({
+                label: 'Income',
+                data: incomeData,
+                borderColor: '#65bc7b',
+                backgroundColor: 'rgba(101, 188, 123, 0.1)',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                pointRadius: 3,
+                pointHoverRadius: 5
+            });
+        }
+
+        trendChart = new Chart(canvas, {
+            type: 'line',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            color: '#e8e8e8',
+                            font: { family: 'Figtree', size: 12 },
+                            usePointStyle: true,
+                            padding: 14,
+                            boxWidth: 6
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#0f141a',
+                        titleColor: '#e8e8e8',
+                        bodyColor: '#e8e8e8',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        padding: 10,
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${formatMoney(ctx.parsed.y)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#8b9199', font: { family: 'JetBrains Mono', size: 11 } },
+                        grid: { color: 'rgba(255,255,255,0.04)' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#8b9199',
+                            font: { family: 'JetBrains Mono', size: 11 },
+                            callback: (v) => '$' + v.toLocaleString()
+                        },
+                        grid: { color: 'rgba(255,255,255,0.06)' },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        if (sub) sub.textContent = granularity === 'week' ? 'weekly' : 'monthly';
+        section.classList.remove('hidden');
+    }
+
     // --- Category chart + breakdown ---
 
     const CATEGORY_CHART_TOP_N = 8;
@@ -560,6 +705,7 @@
         if (state.files.length === 0) {
             // Back to initial state.
             if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+            if (trendChart) { trendChart.destroy(); trendChart = null; }
             resultsSection.classList.add('hidden');
             uploadSection.classList.remove('hidden');
             uploadPrompt.textContent = 'Drop your CSV here, or click to select';
@@ -576,6 +722,7 @@
         renderPeriod(txns);
         renderChips();
         renderSummary(txns);
+        renderTrend(txns);
         const agg = rollupTopN(aggregateSpendByCategory(txns), CATEGORY_CHART_TOP_N);
         renderChart(agg);
         renderBreakdown(agg);
