@@ -194,6 +194,20 @@
         `).join('');
     }
 
+    function renderPeriod(txns) {
+        const el = document.getElementById('results-period');
+        if (!el) return;
+        const validDates = txns.map(t => t.dateObj).filter(Boolean);
+        if (validDates.length === 0) { el.innerHTML = ''; return; }
+        const start = new Date(Math.min(...validDates));
+        const end = new Date(Math.max(...validDates));
+        const days = Math.round((end - start) / 86400000) + 1;
+        el.innerHTML = `
+            ${formatDate(start)}<span class="period-sep">→</span>${formatDate(end)}
+            <span class="period-sep">·</span><span class="period-days">${days.toLocaleString()} days</span>
+        `;
+    }
+
     function renderSummary(txns) {
         const debits = txns.filter(t => t.amount < 0);
         const credits = txns.filter(t => t.amount > 0);
@@ -559,6 +573,7 @@
             ? `${state.files[0].name} · ${state.files[0].bank}`
             : `Combined view · ${n} files · ${txns.length.toLocaleString()} transactions`;
 
+        renderPeriod(txns);
         renderChips();
         renderSummary(txns);
         const agg = rollupTopN(aggregateSpendByCategory(txns), CATEGORY_CHART_TOP_N);

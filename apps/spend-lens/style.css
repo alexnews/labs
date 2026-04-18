@@ -128,10 +128,21 @@ a:hover { border-bottom-color: var(--accent); }
 
 .results-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 1rem;
     margin-bottom: 1.5rem;
 }
+.results-heading { min-width: 0; flex: 1; }
+.results-period {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 0.35rem;
+    letter-spacing: 0.03em;
+}
+.results-period .period-sep { margin: 0 0.35rem; color: var(--border-strong); }
+.results-period .period-days { color: var(--accent); }
 .reset-btn {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.78rem;
