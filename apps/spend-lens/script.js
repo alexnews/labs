@@ -1226,21 +1226,43 @@
 
     // --- User tag application ---
 
+    function showToast(message) {
+        const el = document.getElementById('toast');
+        if (!el) return;
+        el.textContent = message;
+        el.classList.remove('hidden');
+        // force reflow so transition runs
+        void el.offsetWidth;
+        el.classList.add('visible');
+        clearTimeout(showToast._timer);
+        showToast._timer = setTimeout(() => {
+            el.classList.remove('visible');
+            setTimeout(() => el.classList.add('hidden'), 300);
+        }, 2400);
+    }
+
     function applyUserTag(merchantName, category) {
-        if (!merchantName || !category) return;
+        if (!merchantName || !category) {
+            console.warn('[spend-lens] applyUserTag called with empty value', { merchantName, category });
+            return;
+        }
 
         userTags[merchantName] = category;
         saveUserTags(userTags);
 
         // Re-categorize every transaction whose normalized name matches.
+        let matched = 0;
         for (const f of state.files) {
             for (const t of f.transactions) {
                 if (normalizeMerchantName(t.description) === merchantName) {
                     t.category = category;
                     t.userTagged = true;
+                    matched++;
                 }
             }
         }
+
+        console.log(`[spend-lens] tagged "${merchantName}" → "${category}" — ${matched} transaction${matched === 1 ? '' : 's'} updated`);
 
         // Level-2: if the ML model is loaded, teach it by adding this merchant
         // as an exemplar and re-averaging the centroid.
@@ -1250,6 +1272,7 @@
         }
 
         render();
+        showToast(`Tagged "${merchantName}" as ${category} · ${matched} transaction${matched === 1 ? '' : 's'}`);
     }
 
     function applyClearUserTags() {
