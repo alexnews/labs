@@ -243,6 +243,126 @@
         `;
     }
 
+    // --- Top savings opportunities ---
+
+    function periodLengthDays(txns) {
+        const dates = txns.map(t => t.dateObj).filter(Boolean);
+        if (dates.length === 0) return 0;
+        const min = Math.min(...dates);
+        const max = Math.max(...dates);
+        return Math.max(1, Math.round((max - min) / 86400000) + 1);
+    }
+
+    function annualizeFromPeriod(amount, periodDays) {
+        if (periodDays <= 0) return amount;
+        return amount * (365 / periodDays);
+    }
+
+    function analyzeSavings(txns, recurring) {
+        const opportunities = [];
+        const periodDays = periodLengthDays(txns);
+
+        // A. Subscriptions — assume 30% of recurring charges are reviewable / cuttable.
+        if (recurring.length > 0) {
+            const monthlyTotal = recurring.reduce((s, r) => s + r.annualized / 12, 0);
+            const annualTotal = recurring.reduce((s, r) => s + r.annualized, 0);
+            if (monthlyTotal >= 10) {
+                const top = recurring.slice(0, 3).map(r => r.name);
+                const detail = `${top.join(', ')}${recurring.length > 3 ? `, +${recurring.length - 3} more` : ''}`;
+                const impact = annualTotal * 0.3;
+                opportunities.push({
+                    title: `${recurring.length} recurring charge${recurring.length > 1 ? 's' : ''} totaling ${formatMoney(-monthlyTotal)}/mo`,
+                    detail,
+                    action: 'Review each one — cancel what you forgot about',
+                    impact,
+                    impactLabel: formatMoney(-impact) + '/yr',
+                    impactSub: 'potential savings'
+                });
+            }
+        }
+
+        // B. Fees — annualize whatever shows up in the Fees category.
+        const fees = txns.filter(t => t.category === 'Fees' && t.amount < 0);
+        const feeTotal = fees.reduce((s, t) => s + Math.abs(t.amount), 0);
+        if (feeTotal >= 5) {
+            const annualized = annualizeFromPeriod(feeTotal, periodDays);
+            opportunities.push({
+                title: `${formatMoney(-feeTotal)} in fees this period`,
+                detail: `${fees.length} fee charge${fees.length > 1 ? 's' : ''} — late fees, overdrafts, foreign-transaction fees`,
+                action: 'Most are avoidable with a fee-free account or autopay setup',
+                impact: annualized,
+                impactLabel: formatMoney(-annualized) + '/yr',
+                impactSub: 'if pattern continues'
+            });
+        }
+
+        // C. Food & Drink frequency — assume cutting dining-out by 25% is realistic.
+        const food = txns.filter(t => t.category === 'Food & Drink' && t.amount < 0);
+        const foodTotal = food.reduce((s, t) => s + Math.abs(t.amount), 0);
+        if (food.length >= 5 && foodTotal >= 100) {
+            const annualized = annualizeFromPeriod(foodTotal, periodDays);
+            const impact = annualized * 0.25;
+            opportunities.push({
+                title: `${food.length} restaurant & delivery charges, ${formatMoney(-foodTotal)}`,
+                detail: `Food & delivery is ${Math.round(foodTotal / Math.max(1, sumSpend(txns)) * 100)}% of your outflows this period`,
+                action: 'Cooking at home 25% more often would save roughly this',
+                impact,
+                impactLabel: formatMoney(-impact) + '/yr',
+                impactSub: '25% reduction'
+            });
+        }
+
+        // D. Streaming stack overlap — 3+ entertainment subs flagged as a specific callout.
+        const streamingSubs = recurring.filter(r =>
+            r.category === 'Entertainment' && r.cadence === 'monthly'
+        );
+        if (streamingSubs.length >= 3) {
+            const monthlyStreaming = streamingSubs.reduce((s, r) => s + r.avgAmount, 0);
+            const impact = monthlyStreaming * 12 * 0.4; // assume 40% of streaming stack is consolidation-worthy
+            opportunities.push({
+                title: `${streamingSubs.length} streaming services totaling ${formatMoney(-monthlyStreaming)}/mo`,
+                detail: streamingSubs.map(s => s.name).join(', '),
+                action: 'Rotate instead of stacking — cancel and re-sub as you watch',
+                impact,
+                impactLabel: formatMoney(-impact) + '/yr',
+                impactSub: 'rotation savings'
+            });
+        }
+
+        return opportunities.sort((a, b) => b.impact - a.impact).slice(0, 3);
+    }
+
+    function sumSpend(txns) {
+        return txns.reduce((s, t) => t.amount < 0 ? s + Math.abs(t.amount) : s, 0);
+    }
+
+    function renderSavings(opportunities) {
+        const section = document.getElementById('savings-section');
+        const list = document.getElementById('savings-list');
+        if (!section || !list) return;
+
+        if (opportunities.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        list.innerHTML = opportunities.map(o => `
+            <li class="savings-item">
+                <div class="savings-main">
+                    <div class="savings-title">${escapeHtml(o.title)}</div>
+                    <div class="savings-detail">${escapeHtml(o.detail)}</div>
+                    <div class="savings-action">${escapeHtml(o.action)}</div>
+                </div>
+                <div class="savings-impact">
+                    <div class="savings-impact-val">${o.impactLabel}</div>
+                    <div class="savings-impact-sub">${escapeHtml(o.impactSub)}</div>
+                </div>
+            </li>
+        `).join('');
+
+        section.classList.remove('hidden');
+    }
+
     // --- Trend chart (spend + income over time) ---
 
     let trendChart = null;
@@ -721,12 +841,14 @@
 
         renderPeriod(txns);
         renderChips();
+        const recurring = detectRecurring(txns);
+        renderSavings(analyzeSavings(txns, recurring));
         renderSummary(txns);
         renderTrend(txns);
         const agg = rollupTopN(aggregateSpendByCategory(txns), CATEGORY_CHART_TOP_N);
         renderChart(agg);
         renderBreakdown(agg);
-        renderRecurring(detectRecurring(txns));
+        renderRecurring(recurring);
         renderUncategorized(txns);
         renderPreview(txns);
 
