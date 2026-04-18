@@ -87,7 +87,8 @@
     };
 
     let modelPipeline = null;
-    let categoryCentroids = null;
+    let exemplarVectors = null; // { category: { base: [vec...], user: [vec...] } }
+    let categoryCentroids = null; // { category: vec } — derived from exemplarVectors
     let loadPromise = null;
     let modelReady = false;
 
@@ -122,20 +123,47 @@
         return s;
     }
 
-    async function computeCategoryCentroids(pipe) {
-        const centroids = {};
-        for (const [cat, examples] of Object.entries(CATEGORY_EXEMPLARS)) {
-            const vecs = [];
-            for (const phrase of examples) {
-                vecs.push(await embedOne(pipe, phrase));
-            }
-            centroids[cat] = averageAndNormalize(vecs);
-        }
-        return centroids;
+    function recomputeCentroid(category) {
+        const slots = exemplarVectors[category];
+        if (!slots) { delete categoryCentroids[category]; return; }
+        const all = [...slots.base, ...slots.user];
+        if (all.length === 0) { delete categoryCentroids[category]; return; }
+        categoryCentroids[category] = averageAndNormalize(all);
     }
 
-    async function load(progressCallback) {
-        if (modelReady) return;
+    async function embedBaseExemplars(pipe) {
+        exemplarVectors = {};
+        for (const [cat, phrases] of Object.entries(CATEGORY_EXEMPLARS)) {
+            const vecs = [];
+            for (const phrase of phrases) vecs.push(await embedOne(pipe, phrase));
+            exemplarVectors[cat] = { base: vecs, user: [] };
+        }
+    }
+
+    async function loadUserExemplars(userExemplarsByCategory) {
+        if (!userExemplarsByCategory) return;
+        for (const [cat, phrases] of Object.entries(userExemplarsByCategory)) {
+            if (!exemplarVectors[cat]) exemplarVectors[cat] = { base: [], user: [] };
+            for (const phrase of phrases) {
+                exemplarVectors[cat].user.push(await embedOne(modelPipeline, phrase));
+            }
+        }
+    }
+
+    function recomputeAllCentroids() {
+        categoryCentroids = {};
+        for (const cat of Object.keys(exemplarVectors)) recomputeCentroid(cat);
+    }
+
+    async function load(progressCallback, userExemplarsByCategory) {
+        if (modelReady) {
+            // Already loaded; just merge any new user exemplars.
+            if (userExemplarsByCategory) {
+                await loadUserExemplars(userExemplarsByCategory);
+                recomputeAllCentroids();
+            }
+            return;
+        }
         if (loadPromise) return loadPromise;
 
         loadPromise = (async () => {
@@ -156,11 +184,25 @@
                 { progress_callback: progressCallback }
             );
 
-            categoryCentroids = await computeCategoryCentroids(modelPipeline);
+            await embedBaseExemplars(modelPipeline);
+            await loadUserExemplars(userExemplarsByCategory);
+            recomputeAllCentroids();
             modelReady = true;
         })();
 
         return loadPromise;
+    }
+
+    // Add a single user exemplar and recompute that category's centroid.
+    // Used by the tag-feedback loop — the model literally learns from corrections.
+    async function addUserExemplar(category, phrase) {
+        if (!modelReady) return false;
+        if (!category || !phrase) return false;
+        const vec = await embedOne(modelPipeline, phrase);
+        if (!exemplarVectors[category]) exemplarVectors[category] = { base: [], user: [] };
+        exemplarVectors[category].user.push(vec);
+        recomputeCentroid(category);
+        return true;
     }
 
     async function classify(description) {
@@ -186,6 +228,8 @@
     window.SpendLensClassifier = {
         load,
         classify,
+        addUserExemplar,
+        categories: () => Object.keys(CATEGORY_EXEMPLARS),
         isReady: () => modelReady,
         threshold: SIMILARITY_THRESHOLD,
         modelId: MODEL_ID

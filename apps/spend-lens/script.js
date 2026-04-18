@@ -35,6 +35,50 @@
         nextId: 1
     };
 
+    // --- User tags (persisted on THIS device's localStorage, never transmitted) ---
+    // Normalized merchant name → category override. Acts as Level-1 (exact match)
+    // rule checked before keyword rules or ML. Also fed to the ML classifier as
+    // Level-2 exemplars so centroids learn from your world.
+    const USER_TAGS_KEY = 'spendlens.userTags';
+
+    function loadUserTags() {
+        try {
+            const raw = localStorage.getItem(USER_TAGS_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) { return {}; }
+    }
+
+    function saveUserTags(tags) {
+        try {
+            localStorage.setItem(USER_TAGS_KEY, JSON.stringify(tags));
+        } catch (e) { /* quota or disabled — ignore */ }
+    }
+
+    function clearUserTags() {
+        try { localStorage.removeItem(USER_TAGS_KEY); } catch (e) {}
+    }
+
+    let userTags = loadUserTags();
+
+    function userExemplarsByCategory() {
+        const out = {};
+        for (const [merchant, cat] of Object.entries(userTags)) {
+            if (!out[cat]) out[cat] = [];
+            out[cat].push(merchant);
+        }
+        return out;
+    }
+
+    // Level-1: check user tags first, fall back to keyword rules.
+    function categorizeWithUserTags(description, bankCategory) {
+        const normalized = normalizeMerchantName(description);
+        if (normalized && userTags[normalized]) return userTags[normalized];
+        if (window.SpendLensCategories) {
+            return window.SpendLensCategories.categorize(description, bankCategory);
+        }
+        return 'Uncategorized';
+    }
+
     // --- Parsing helpers ---
 
     function findColumn(headers, candidates) {
@@ -106,7 +150,6 @@
         }
 
         const bank = detectBankFormat(headers);
-        const categorize = (window.SpendLensCategories && window.SpendLensCategories.categorize) || (() => 'Uncategorized');
 
         const transactions = rows.map(row => {
             const dateStr = String(row[dateCol] || '').trim();
@@ -117,7 +160,7 @@
                 dateObj: parseDate(dateStr),
                 description: desc,
                 amount: parseAmount(row, amountCol),
-                category: categorize(desc, bankCat)
+                category: categorizeWithUserTags(desc, bankCat)
             };
         }).filter(t => t.date && t.description);
 
@@ -839,6 +882,15 @@
         return Array.from(byName.values()).sort((a, b) => b.total - a.total);
     }
 
+    function categoryOptions(selected) {
+        const cats = [
+            'Food & Drink', 'Groceries', 'Shopping', 'Transportation',
+            'Travel', 'Entertainment', 'Bills & Utilities', 'Health & Medical',
+            'Fees', 'Transfers & Payments', 'Income'
+        ];
+        return cats.map(c => `<option value="${escapeHtml(c)}"${c === selected ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+    }
+
     function renderUncategorized(txns) {
         const section = document.getElementById('uncategorized-section');
         const list = document.getElementById('uncategorized-list');
@@ -855,9 +907,27 @@
                 <span class="uncat-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
                 <span class="uncat-count">${r.count}×</span>
                 <span class="uncat-amount">${formatMoney(-r.total)}</span>
+                <select class="tag-select" data-merchant="${escapeHtml(r.name)}" aria-label="Tag ${escapeHtml(r.name)} as category">
+                    <option value="">Tag as…</option>
+                    ${categoryOptions(null)}
+                </select>
             </div>
         `).join('');
         section.classList.remove('hidden');
+    }
+
+    function renderTagSummary() {
+        const el = document.getElementById('tag-summary');
+        if (!el) return;
+        const count = Object.keys(userTags).length;
+        if (count === 0) {
+            el.innerHTML = '';
+            return;
+        }
+        el.innerHTML = `
+            <span class="tag-count">${count} custom tag${count === 1 ? '' : 's'} saved on this device</span>
+            <button class="tag-clear-btn" id="tag-clear-btn" type="button">Clear all</button>
+        `;
     }
 
     function render() {
@@ -870,6 +940,7 @@
             uploadSection.classList.remove('hidden');
             uploadPrompt.textContent = 'Drop your CSV here, or click to select';
             if (sampleLink) sampleLink.style.display = '';
+            renderTagSummary();
             return;
         }
 
@@ -890,6 +961,7 @@
         renderBreakdown(agg);
         renderRecurring(recurring);
         renderUncategorized(txns);
+        renderTagSummary();
         renderPreview(txns);
 
         resultsSection.classList.remove('hidden');
@@ -990,7 +1062,7 @@
                     const file = progress.file || progress.name || 'model';
                     setAiStatus(`Downloading ${file} — ${pct}%`);
                 }
-            });
+            }, userExemplarsByCategory());
         } catch (e) {
             setAiStatus('Failed to load model: ' + e.message, 'error');
             aiBtn.disabled = false;
@@ -1047,6 +1119,66 @@
     }
 
     if (aiBtn) aiBtn.addEventListener('click', handleAiClick);
+
+    // --- User tag application ---
+
+    function applyUserTag(merchantName, category) {
+        if (!merchantName || !category) return;
+
+        userTags[merchantName] = category;
+        saveUserTags(userTags);
+
+        // Re-categorize every transaction whose normalized name matches.
+        for (const f of state.files) {
+            for (const t of f.transactions) {
+                if (normalizeMerchantName(t.description) === merchantName) {
+                    t.category = category;
+                    t.userTagged = true;
+                }
+            }
+        }
+
+        // Level-2: if the ML model is loaded, teach it by adding this merchant
+        // as an exemplar and re-averaging the centroid.
+        if (window.SpendLensClassifier && window.SpendLensClassifier.isReady()) {
+            window.SpendLensClassifier.addUserExemplar(category, merchantName)
+                .catch(() => { /* non-fatal */ });
+        }
+
+        render();
+    }
+
+    function applyClearUserTags() {
+        if (!confirm('Clear all your saved category tags? This will revert those merchants back to the default rules/ML.')) return;
+        clearUserTags();
+        userTags = {};
+        // Re-categorize all existing transactions from scratch (user overrides gone).
+        for (const f of state.files) {
+            for (const t of f.transactions) {
+                t.category = categorizeWithUserTags(t.description, null);
+                t.userTagged = false;
+            }
+        }
+        render();
+    }
+
+    // Delegated change handler for the tag-select dropdowns in the uncategorized list.
+    const uncatList = document.getElementById('uncategorized-list');
+    if (uncatList) {
+        uncatList.addEventListener('change', (e) => {
+            const sel = e.target;
+            if (!sel || !sel.classList || !sel.classList.contains('tag-select')) return;
+            const merchant = sel.dataset.merchant;
+            const category = sel.value;
+            if (!merchant || !category) return;
+            applyUserTag(merchant, category);
+        });
+    }
+
+    // Clear-all button (inside the tag-summary block which re-renders).
+    document.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'tag-clear-btn') applyClearUserTags();
+    });
 
     // --- Wire up events ---
 
