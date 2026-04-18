@@ -90,10 +90,17 @@
             </div>
 
             <div class="uncategorized-section hidden" id="uncategorized-section">
-                <h3>Top uncategorized merchants</h3>
-                <div class="uncategorized-help">
-                    These merchants aren't in <code>categories.js</code> yet. Add keywords for them to improve auto-categorization — or tell me and I'll add them.
+                <div class="uncat-header">
+                    <h3>Top uncategorized merchants</h3>
+                    <button class="ai-btn" id="ai-btn" type="button">
+                        <span class="ai-btn-label">Smart-categorize with AI</span>
+                        <span class="ai-btn-hint">sentence-transformers · runs in your browser · ~22MB one-time download</span>
+                    </button>
                 </div>
+                <div class="uncategorized-help">
+                    These merchants aren't in <code>categories.js</code> yet. Add keywords for them, tell me and I'll add them, or click the button to let an embedding model classify them locally.
+                </div>
+                <div class="ai-status hidden" id="ai-status"></div>
                 <div class="uncategorized-list" id="uncategorized-list"></div>
             </div>
 
@@ -102,7 +109,7 @@
                 <div class="preview-table" id="preview-table"></div>
             </div>
             <div class="day1-note">
-                <strong>Day-2 build.</strong> Subscription detection, savings insights, and lifestyle-inflation analysis land next. Categorization rules live in <code>categories.js</code> — fork and tune for your spending.
+                <strong>Built in a week.</strong> Rules in <code>categories.js</code>, embedding model (<code>Xenova/all-MiniLM-L6-v2</code>) in <code>classifier.js</code>. The model runs inside your browser tab — your transaction data never leaves your device. Fork the repo and tune either layer.
             </div>
         </section>
 
@@ -116,6 +123,7 @@
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="categories.js"></script>
+    <script src="classifier.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

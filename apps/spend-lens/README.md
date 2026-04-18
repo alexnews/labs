@@ -50,21 +50,21 @@ If your bank uses different headers, spend-lens falls back to heuristic matching
 - Summary cards: transaction count, total spend, total income, net
 - Preview of first 10 transactions
 
-### Week 1 roadmap
-- Rule-based merchant categorizer (top ~200 merchants)
-- Embedding-based categorizer for unknowns ([Transformers.js](https://huggingface.co/docs/transformers.js), runs locally)
-- Charts: spend-by-category, monthly trend, top merchants
-- **Savings insights** — the actual value:
-  - Subscription creep detector (recurring charges, duplicate streaming)
-  - Bank-fee finder
-  - Lifestyle-inflation trend (same-merchant spend over time)
-  - Weekend vs weekday splurge breakdown
-  - Top 3 ranked savings opportunities
+### Shipped
+- Rule-based merchant categorizer (~200 US merchants, 11 categories, in `categories.js`)
+- **Embedding-based classifier for the long tail** — [Transformers.js](https://huggingface.co/docs/transformers.js) running [`Xenova/all-MiniLM-L6-v2`](https://huggingface.co/Xenova/all-MiniLM-L6-v2) **in the browser**. Opt-in button re-classifies "Uncategorized" transactions via cosine similarity against category exemplars. Model weights download once (~22MB), cached forever.
+- Category pie chart + breakdown list
+- Spend-over-time line chart (auto weekly / monthly)
+- **Subscription creep detector** — groups by normalized merchant, detects cadence (weekly / biweekly / monthly / quarterly / annual), requires stable amounts
+- **Top 3 savings opportunities** — synthesizer card at top of results
+- Multi-file upload (Chase checking + credit card + BofA + Amex merged into one view)
+- Top uncategorized merchants list (diagnostic)
 
 ### V2 (maybe)
 - Forecast: "at this pace you'll end the month $X over budget in Dining"
 - Bill predictor + cash-flow calendar
 - Month-over-month comparison
+- Category drill-down (click pie slice → see transactions)
 - Export insights as PDF (client-side, via [jsPDF](https://github.com/parallax/jsPDF))
 
 ## Sample data
@@ -77,12 +77,20 @@ Just three files:
 
 ```
 spend-lens/
-├── index.html            ← UI, loads papaparse from CDN
+├── index.html            ← UI, loads deps from CDN
 ├── style.css             ← dark theme (matches labs.kargin-utkin.com)
-├── script.js             ← all logic (<300 lines)
+├── script.js             ← state, rendering, savings analysis
+├── categories.js         ← rule-based categorizer (forkable merchant list)
+├── classifier.js         ← Transformers.js embedding fallback (in-browser ML)
 ├── sample_transactions.csv
 └── README.md
 ```
+
+### Dependencies (all loaded from CDN, no build step)
+
+- [PapaParse](https://www.papaparse.com/) — CSV parsing
+- [Chart.js](https://www.chartjs.org/) — pie + line charts
+- [Transformers.js](https://huggingface.co/docs/transformers.js) — in-browser sentence-transformers (loaded lazily, only if you click the AI button)
 
 No build system. No frameworks. Open the file, read the code.
 

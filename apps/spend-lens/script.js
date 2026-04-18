@@ -920,6 +920,94 @@
         csvInput.value = '';
     }
 
+    // --- AI classifier integration ---
+
+    const aiBtn = document.getElementById('ai-btn');
+    const aiStatus = document.getElementById('ai-status');
+    let aiClassifyInFlight = false;
+
+    function setAiStatus(text, variant) {
+        if (!aiStatus) return;
+        aiStatus.classList.remove('hidden', 'success', 'error');
+        if (variant) aiStatus.classList.add(variant);
+        aiStatus.textContent = text;
+    }
+
+    async function handleAiClick() {
+        if (aiClassifyInFlight) return;
+        if (!window.SpendLensClassifier) {
+            setAiStatus('Classifier script did not load.', 'error');
+            return;
+        }
+        aiClassifyInFlight = true;
+        aiBtn.disabled = true;
+        setAiStatus('Loading ML model (first time: ~22MB download, then cached in your browser)...');
+
+        try {
+            await window.SpendLensClassifier.load((progress) => {
+                if (progress && progress.status === 'progress' && typeof progress.progress === 'number') {
+                    const pct = Math.round(progress.progress);
+                    const file = progress.file || progress.name || 'model';
+                    setAiStatus(`Downloading ${file} — ${pct}%`);
+                }
+            });
+        } catch (e) {
+            setAiStatus('Failed to load model: ' + e.message, 'error');
+            aiBtn.disabled = false;
+            aiClassifyInFlight = false;
+            return;
+        }
+
+        const targets = [];
+        for (const f of state.files) {
+            for (const t of f.transactions) {
+                if (t.category === 'Uncategorized' && t.amount < 0) targets.push(t);
+            }
+        }
+
+        if (targets.length === 0) {
+            setAiStatus('No uncategorized outflows to classify.', 'success');
+            aiBtn.disabled = false;
+            aiClassifyInFlight = false;
+            return;
+        }
+
+        setAiStatus(`Classifying ${targets.length} transactions...`);
+
+        let assigned = 0;
+        let processed = 0;
+        for (const t of targets) {
+            try {
+                const key = normalizeMerchantName(t.description) || t.description;
+                const result = await window.SpendLensClassifier.classify(key);
+                if (result && result.category) {
+                    t.category = result.category;
+                    t.aiClassified = true;
+                    t.aiScore = result.score;
+                    assigned++;
+                }
+            } catch (e) {
+                // Skip individual failures; keep going.
+            }
+            processed++;
+            if (processed % 10 === 0 || processed === targets.length) {
+                setAiStatus(`Classifying... ${processed} / ${targets.length}`);
+            }
+        }
+
+        render();
+        const btnLabel = document.querySelector('#ai-btn .ai-btn-label');
+        if (btnLabel) btnLabel.textContent = 'Re-run AI classification';
+        setAiStatus(
+            `${assigned} of ${targets.length} classified by the model · threshold ≥ ${window.SpendLensClassifier.threshold}`,
+            'success'
+        );
+        aiBtn.disabled = false;
+        aiClassifyInFlight = false;
+    }
+
+    if (aiBtn) aiBtn.addEventListener('click', handleAiClick);
+
     // --- Wire up events ---
 
     csvInput.addEventListener('change', (e) => ingestFileList(e.target.files));
