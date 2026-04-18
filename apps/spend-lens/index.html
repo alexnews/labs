@@ -32,11 +32,11 @@
         <section class="upload-section" id="upload-section">
             <label for="csv-input" class="upload-zone" id="upload-zone">
                 <div class="upload-icon">↓</div>
-                <div class="upload-prompt">Drop your CSV here, or click to select</div>
-                <div class="upload-sub">Chase · Bank of America · Amex · Wells Fargo</div>
-                <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
+                <div class="upload-prompt" id="upload-prompt">Drop your CSV here, or click to select</div>
+                <div class="upload-sub">Chase · Bank of America · Amex · Wells Fargo · multiple files supported</div>
+                <input type="file" id="csv-input" accept=".csv,text/csv" multiple hidden>
             </label>
-            <div class="sample-link">
+            <div class="sample-link" id="sample-link">
                 No real statement handy? <a href="sample_transactions.csv" download>Download a synthetic sample CSV</a> to try it out.
             </div>
         </section>
@@ -44,15 +44,16 @@
         <section class="results hidden" id="results">
             <div class="results-header">
                 <h2 id="results-title">Results</h2>
-                <button class="reset-btn" id="reset-btn">Load another file</button>
+                <button class="reset-btn" id="reset-btn">Clear all</button>
             </div>
+            <div class="file-chips" id="file-chips"></div>
             <div class="summary-cards" id="summary-cards"></div>
             <div class="preview-table-wrapper">
-                <h3>First 10 transactions</h3>
+                <h3 id="preview-title">Recent transactions</h3>
                 <div class="preview-table" id="preview-table"></div>
             </div>
             <div class="day1-note">
-                <strong>Day-1 build.</strong> Categorization, savings insights, and charts arrive this week. Today's scaffold proves the privacy architecture end-to-end.
+                <strong>Day-2 build.</strong> Categorization, savings insights, and charts arrive this week. Today you can load multiple statements and see the combined picture.
             </div>
         </section>
 
