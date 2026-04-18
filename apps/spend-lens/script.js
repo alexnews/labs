@@ -339,9 +339,15 @@
         const tableRows = top.map(t => {
             const cls = t.amount < 0 ? 'neg' : 'pos';
             const source = multiFile ? `<td class="source">${escapeHtml(t.sourceBank)}</td>` : '';
+            const cat = t.category || 'Uncategorized';
+            const uncat = cat === 'Uncategorized' ? ' uncategorized' : '';
+            const catCell = `<td class="category${uncat}">
+                <span class="cat-swatch" style="background:${categoryColor(cat)}"></span><span class="cat-label">${escapeHtml(cat)}</span>
+            </td>`;
             return `<tr>
                 <td>${escapeHtml(t.date)}</td>
                 <td>${escapeHtml(t.description)}</td>
+                ${catCell}
                 ${source}
                 <td class="amount ${cls}">${formatMoney(t.amount)}</td>
             </tr>`;
@@ -350,10 +356,63 @@
         const sourceHeader = multiFile ? '<th>Source</th>' : '';
         previewTable.innerHTML = `
             <table>
-                <thead><tr><th>Date</th><th>Description</th>${sourceHeader}<th>Amount</th></tr></thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Category</th>${sourceHeader}<th>Amount</th></tr></thead>
                 <tbody>${tableRows}</tbody>
             </table>
         `;
+    }
+
+    // --- Uncategorized merchants ---
+
+    function normalizeMerchantName(desc) {
+        // Strip long numeric IDs, * / # noise, and trailing city codes to group
+        // "STARBUCKS STORE 12847 ANYTOWN FL" and "STARBUCKS STORE 99999 ANYCITY FL"
+        // as the same merchant for the uncategorized roll-up.
+        let s = String(desc || '').toUpperCase();
+        s = s.replace(/[*#].*$/, '');            // everything after * or #
+        s = s.replace(/\s+\d{3,}.*$/, '');       // trailing "1234 LOCATION"
+        s = s.replace(/\s+\d+$/, '');            // trailing lone numbers
+        s = s.replace(/\s+[A-Z]{2}$/, '');       // trailing state code
+        s = s.trim();
+        // Keep first 4 tokens — most bank descriptions front-load the merchant name.
+        const parts = s.split(/\s+/).slice(0, 4);
+        return parts.join(' ') || desc;
+    }
+
+    function aggregateUncategorized(txns) {
+        const byName = new Map();
+        for (const t of txns) {
+            if (t.category !== 'Uncategorized') continue;
+            if (t.amount >= 0) continue; // focus on outflows worth categorizing
+            const key = normalizeMerchantName(t.description);
+            if (!key) continue;
+            const entry = byName.get(key) || { name: key, count: 0, total: 0 };
+            entry.count += 1;
+            entry.total += Math.abs(t.amount);
+            byName.set(key, entry);
+        }
+        return Array.from(byName.values()).sort((a, b) => b.total - a.total);
+    }
+
+    function renderUncategorized(txns) {
+        const section = document.getElementById('uncategorized-section');
+        const list = document.getElementById('uncategorized-list');
+        if (!section || !list) return;
+
+        const rows = aggregateUncategorized(txns).slice(0, 10);
+        if (rows.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        list.innerHTML = rows.map(r => `
+            <div class="uncat-row">
+                <span class="uncat-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
+                <span class="uncat-count">${r.count}×</span>
+                <span class="uncat-amount">${formatMoney(-r.total)}</span>
+            </div>
+        `).join('');
+        section.classList.remove('hidden');
     }
 
     function render() {
@@ -379,6 +438,7 @@
         const agg = rollupTopN(aggregateSpendByCategory(txns), CATEGORY_CHART_TOP_N);
         renderChart(agg);
         renderBreakdown(agg);
+        renderUncategorized(txns);
         renderPreview(txns);
 
         resultsSection.classList.remove('hidden');
