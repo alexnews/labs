@@ -125,15 +125,52 @@
             return { ok: false, error: `${fileName}: no valid transactions found.` };
         }
 
+        // Assign stable dedupe keys. Two identical transactions within the SAME file
+        // (e.g. genuinely two $5 coffees on the same day) get sequential numbers so
+        // they survive cross-file dedup. Same key matching across files == duplicate.
+        const seqCounter = new Map();
+        for (const t of transactions) {
+            const base = `${t.date}|${t.description}|${t.amount}`;
+            const seq = (seqCounter.get(base) || 0) + 1;
+            seqCounter.set(base, seq);
+            t.dedupeKey = `${base}|${seq}`;
+        }
+
         return {
             ok: true,
-            file: { id: state.nextId++, name: fileName, bank, transactions }
+            file: { id: state.nextId++, name: fileName, bank, transactions, skippedDupes: 0 }
         };
     }
 
     // --- State mutations ---
 
     function addFile(parsed) {
+        // Dedup against transactions already loaded from other files.
+        const existing = new Set();
+        for (const f of state.files) {
+            for (const t of f.transactions) existing.add(t.dedupeKey);
+        }
+
+        const kept = [];
+        let skipped = 0;
+        for (const t of parsed.transactions) {
+            if (existing.has(t.dedupeKey)) {
+                skipped++;
+            } else {
+                kept.push(t);
+                existing.add(t.dedupeKey);
+            }
+        }
+
+        if (kept.length === 0) {
+            showError(
+                `${parsed.name}: all ${parsed.transactions.length} transactions are duplicates of data already loaded. Nothing added.`
+            );
+            return;
+        }
+
+        parsed.transactions = kept;
+        parsed.skippedDupes = skipped;
         state.files.push(parsed);
         render();
     }
@@ -185,13 +222,16 @@
     }
 
     function renderChips() {
-        fileChips.innerHTML = state.files.map(f => `
-            <div class="file-chip" data-id="${f.id}">
-                <span class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
-                <span class="chip-meta">${escapeHtml(f.bank)} · ${f.transactions.length}</span>
-                <button class="chip-remove" data-id="${f.id}" aria-label="Remove file">×</button>
-            </div>
-        `).join('');
+        fileChips.innerHTML = state.files.map(f => {
+            const dupes = f.skippedDupes ? ` · +${f.skippedDupes} dupes skipped` : '';
+            return `
+                <div class="file-chip" data-id="${f.id}">
+                    <span class="chip-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+                    <span class="chip-meta">${escapeHtml(f.bank)} · ${f.transactions.length}${dupes}</span>
+                    <button class="chip-remove" data-id="${f.id}" aria-label="Remove file">×</button>
+                </div>
+            `;
+        }).join('');
     }
 
     function renderPeriod(txns) {
